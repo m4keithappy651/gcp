@@ -199,8 +199,6 @@ UUID=$(grep -o '"id": "[^"]*' config.json | cut -d'"' -f4)
 WS_PATH=$(grep -o '"path": "[^"]*' config.json | cut -d'"' -f4)
 IMAGE="gcr.io/$PROJECT_ID/vless-ws:latest"
 
-progress_bar 20 "LOADING CONFIGURATION"
-
 echo ""
 echo -e "${BOLD}${CYAN}┌────────────────────────────────────────────────────────────────────┐${NC}"
 echo -e "${BOLD}${CYAN}│${NC} ${BOLD}${YELLOW}UUID:${NC}     ${BOLD}${WHITE}$UUID${NC}"
