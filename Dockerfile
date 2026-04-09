@@ -1,7 +1,7 @@
 FROM teddysun/xray:latest
 
-# Install Python for health check server
-RUN apt-get update && apt-get install -y python3 && rm -rf /var/lib/apt/lists/*
+# Install Python for health check server (Alpine uses apk, not apt-get)
+RUN apk update && apk add --no-cache python3 && rm -rf /var/cache/apk/*
 
 # Copy configuration
 COPY config.json /etc/xray/config.json
