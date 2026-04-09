@@ -1,6 +1,9 @@
 FROM teddysun/xray:latest
 
-# Set environment variables for dynamic configuration
+# Install envsubst for configuration templating
+RUN apt-get update && apt-get install -y gettext && rm -rf /var/lib/apt/lists/*
+
+# Environment variables for dynamic config
 ENV UUID=""
 ENV WS_PATH="/ws"
 
@@ -8,10 +11,9 @@ ENV WS_PATH="/ws"
 COPY config.template.json /etc/xray/config.template.json
 COPY entrypoint.sh /entrypoint.sh
 
-# Expose the port Cloud Run will listen on
+RUN chmod +x /entrypoint.sh
+
+# Cloud Run requires listening on 8080
 EXPOSE 8080
 
-# Make entrypoint executable and set it
-RUN apt-get update && apt-get install -y gettext && rm -rf /var/lib/apt/lists/*
-RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
