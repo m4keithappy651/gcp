@@ -277,20 +277,170 @@ echo -e "${BOLD}${GREEN}[✓]${NC} ${BOLD}PUSH COMPLETED${NC}"
 # ==============================================
 #        DEPLOYING TO CLOUD RUN
 # ==============================================
+# ==============================================
+#        DEPLOYING TO CLOUD RUN (WITH AUTO-FALLBACK)
+# ==============================================
 echo ""
 echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
 echo -e "${BOLD}${WHITE}                    DEPLOYING TO CLOUD RUN${NC}"
 echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
 
+DEPLOY_SUCCESS=false
+IAM_POLICY_FAILED=false
+
+# Attempt 1: Deploy as public service (standard)
+echo -e "${BOLD}${CYAN}[ATTEMPT 1/2]${NC} Deploying as public service..."
 gcloud run deploy vless-ws \
     --image "$IMAGE" \
     --platform managed \
     --region "$REGION" \
     --allow-unauthenticated \
     --port 8080 \
-    --quiet &
+    --quiet 2>&1 | tee /tmp/deploy_log.txt &
 DEPLOY_PID=$!
+spinner $DEPLOY_PID "DEPLOYING TO CLOUD RUN (PUBLIC)"
 
+# Check deployment status
+if gcloud run services describe vless-ws --region "$REGION" --format="value(status.url)" &>/dev/null; then
+    DEPLOY_SUCCESS=true
+    echo -e "${BOLD}${GREEN}[✓]${NC} Public deployment successful"
+else
+    # Check if failure was due to IAM policy
+    if grep -q "Setting IAM policy failed\|FAILED_PRECONDITION\|Domain Restricted Sharing" /tmp/deploy_log.txt; then
+        IAM_POLICY_FAILED=true
+        echo -e "${BOLD}${YELLOW}[!]${NC} Public deployment blocked by organization policy"
+        echo -e "${BOLD}${CYAN}[→]${NC} Domain Restricted Sharing (DRS) prevented public access"
+    else
+        echo -e "${BOLD}${RED}[✗]${NC} Deployment failed for unknown reason"
+        cat /tmp/deploy_log.txt
+        exit 1
+    fi
+fi
+
+# Attempt 2: Deploy as private service (IAM policy workaround)
+if [ "$IAM_POLICY_FAILED" = true ]; then
+    echo ""
+    echo -e "${BOLD}${YELLOW}[ATTEMPT 2/2]${NC} Deploying as ${WHITE}PRIVATE${NC} service (authentication required)..."
+    
+    gcloud run deploy vless-ws \
+        --image "$IMAGE" \
+        --platform managed \
+        --region "$REGION" \
+        --port 8080 \
+        --quiet &
+    DEPLOY_PID=$!
+    spinner $DEPLOY_PID "DEPLOYING TO CLOUD RUN (PRIVATE)"
+    
+    if gcloud run services describe vless-ws --region "$REGION" --format="value(status.url)" &>/dev/null; then
+        DEPLOY_SUCCESS=true
+        echo -e "${BOLD}${GREEN}[✓]${NC} Private deployment successful"
+    else
+        echo -e "${BOLD}${RED}[✗]${NC} Private deployment also failed"
+        exit 1
+    fi
+fi
+
+# Clean up temp file
+rm -f /tmp/deploy_log.txt
+
+# ==============================================
+#        POST-DEPLOYMENT: SERVICE ACCOUNT SETUP (IF PRIVATE)
+# ==============================================
+if [ "$IAM_POLICY_FAILED" = true ]; then
+    echo ""
+    echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${BOLD}${WHITE}                    CONFIGURING SERVICE AUTHENTICATION${NC}"
+    echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+    
+    SA_NAME="vless-client-sa"
+    SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+    
+    # Create service account
+    echo -e "${BOLD}${CYAN}[1/4]${NC} Creating service account: ${WHITE}${SA_NAME}${NC}"
+    if gcloud iam service-accounts describe "$SA_EMAIL" &>/dev/null; then
+        echo -e "${BOLD}${GREEN}[✓]${NC} Service account already exists"
+    else
+        gcloud iam service-accounts create "$SA_NAME" \
+            --display-name="VLESS Client Service Account" \
+            --quiet &
+        spinner $! "CREATING SERVICE ACCOUNT"
+        echo -e "${BOLD}${GREEN}[✓]${NC} Service account created"
+    fi
+    
+    # Grant invoker role
+    echo -e "${BOLD}${CYAN}[2/4]${NC} Granting Cloud Run Invoker permission..."
+    gcloud run services add-iam-policy-binding vless-ws \
+        --region="$REGION" \
+        --member="serviceAccount:${SA_EMAIL}" \
+        --role="roles/run.invoker" \
+        --quiet &
+    spinner $! "UPDATING IAM POLICY"
+    echo -e "${BOLD}${GREEN}[✓]${NC} Invoker role granted"
+    
+    # Create and download key
+    echo -e "${BOLD}${CYAN}[3/4]${NC} Generating service account key..."
+    KEY_FILE="$HOME/vless-client-key.json"
+    gcloud iam service-accounts keys create "$KEY_FILE" \
+        --iam-account="$SA_EMAIL" \
+        --quiet &
+    spinner $! "CREATING KEY FILE"
+    echo -e "${BOLD}${GREEN}[✓]${NC} Key saved to: ${WHITE}${KEY_FILE}${NC}"
+    
+    # Generate authentication command
+    echo -e "${BOLD}${CYAN}[4/4]${NC} Preparing authentication snippet..."
+    
+    cat > "$HOME/vless-auth.sh" <<'AUTH_EOF'
+#!/bin/bash
+# VLESS Cloud Run Authentication Token Generator
+# Run this before starting your VLESS client
+
+KEY_FILE="$HOME/vless-client-key.json"
+SERVICE_URL="PLACEHOLDER_URL"
+
+if [ ! -f "$KEY_FILE" ]; then
+    echo "Error: Service account key not found at $KEY_FILE"
+    exit 1
+fi
+
+# Generate identity token
+TOKEN=$(gcloud auth print-identity-token \
+    --impersonate-service-account="$(jq -r .client_email $KEY_FILE)" \
+    --audiences="$SERVICE_URL" \
+    --include-email 2>/dev/null)
+
+if [ -n "$TOKEN" ]; then
+    echo "Bearer $TOKEN"
+else
+    echo "Error: Failed to generate token"
+    exit 1
+fi
+AUTH_EOF
+
+    # Replace placeholder with actual URL
+    sed -i "s|PLACEHOLDER_URL|$SERVICE_URL|g" "$HOME/vless-auth.sh"
+    chmod +x "$HOME/vless-auth.sh"
+    
+    echo -e "${BOLD}${GREEN}[✓]${NC} Authentication script created: ${WHITE}$HOME/vless-auth.sh${NC}"
+    
+    # Display client configuration note
+    echo ""
+    echo -e "${BOLD}${YELLOW}╔══════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BOLD}${YELLOW}║                    ⚠️  CLIENT AUTHENTICATION REQUIRED  ⚠️             ║${NC}"
+    echo -e "${BOLD}${YELLOW}╠══════════════════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${BOLD}${YELLOW}║${NC} ${WHITE}This service is PRIVATE. Your VLESS client must authenticate.${NC}     ${BOLD}${YELLOW}║${NC}"
+    echo -e "${BOLD}${YELLOW}║${NC}                                                                      ${BOLD}${YELLOW}║${NC}"
+    echo -e "${BOLD}${YELLOW}║${NC} ${CYAN}Option 1 (Automated):${NC} Run this before connecting:                    ${BOLD}${YELLOW}║${NC}"
+    echo -e "${BOLD}${YELLOW}║${NC}     ${GREEN}$HOME/vless-auth.sh${NC}                                  ${BOLD}${YELLOW}║${NC}"
+    echo -e "${BOLD}${YELLOW}║${NC}                                                                      ${BOLD}${YELLOW}║${NC}"
+    echo -e "${BOLD}${YELLOW}║${NC} ${CYAN}Option 2 (Manual):${NC} Generate token with:                              ${BOLD}${YELLOW}║${NC}"
+    echo -e "${BOLD}${YELLOW}║${NC}     ${GREEN}gcloud auth print-identity-token \\${NC}                         ${BOLD}${YELLOW}║${NC}"
+    echo -e "${BOLD}${YELLOW}║${NC}     ${GREEN}  --impersonate-service-account=${SA_EMAIL} \\${NC}                ${BOLD}${YELLOW}║${NC}"
+    echo -e "${BOLD}${YELLOW}║${NC}     ${GREEN}  --audiences=${SERVICE_URL}${NC}                                 ${BOLD}${YELLOW}║${NC}"
+    echo -e "${BOLD}${YELLOW}║${NC}                                                                      ${BOLD}${YELLOW}║${NC}"
+    echo -e "${BOLD}${YELLOW}║${NC} ${CYAN}Option 3 (Client Config):${NC} Add header to VLESS client:                ${BOLD}${YELLOW}║${NC}"
+    echo -e "${BOLD}${YELLOW}║${NC}     ${GREEN}Authorization: Bearer \$(./vless-auth.sh)${NC}                     ${BOLD}${YELLOW}║${NC}"
+    echo -e "${BOLD}${YELLOW}╚══════════════════════════════════════════════════════════════════════╝${NC}"
+fi
 # ==============================================
 #        RETRIEVE SERVICE DETAILS
 # ==============================================
