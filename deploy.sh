@@ -32,8 +32,6 @@ echo -e "${BOLD}${GREEN}║                                                     
 echo -e "${BOLD}${GREEN}╚══════════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-pulse_text "⚡ INITIALIZING DEPLOYMENT SYSTEM..." 2
-
 # ==============================================
 #        AUTOMATIC ENVIRONMENT VERIFICATION
 # ==============================================
