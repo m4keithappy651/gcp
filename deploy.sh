@@ -32,6 +32,41 @@ echo -e "${BOLD}${GREEN}║                                                     
 echo -e "${BOLD}${GREEN}╚══════════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
+pulse_text "⚡ INITIALIZING DEPLOYMENT SYSTEM..." 2
+
+# ==============================================
+#        AUTOMATIC ENVIRONMENT VERIFICATION
+# ==============================================
+echo ""
+echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+echo -e "${BOLD}${WHITE}                    ENVIRONMENT VERIFICATION${NC}"
+echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+
+PROJECT_CHECK=$(gcloud config get-value project 2>/dev/null || echo "")
+if [ -n "$PROJECT_CHECK" ]; then
+    echo -e "${BOLD}${GREEN}[✓]${NC} ${BOLD}PROJECT: ${WHITE}${PROJECT_CHECK}${NC}"
+else
+    echo -e "${BOLD}${YELLOW}[!]${NC} ${BOLD}NO PROJECT SET - WILL CREATE NEW${NC}"
+fi
+
+API_COUNT=$(gcloud services list --enabled --format="value(config.name)" 2>/dev/null | wc -l)
+if [ "$API_COUNT" -gt 0 ]; then
+    echo -e "${BOLD}${GREEN}[✓]${NC} ${BOLD}ENABLED APIS: ${WHITE}${API_COUNT} SERVICES${NC}"
+else
+    echo -e "${BOLD}${YELLOW}[!]${NC} ${BOLD}NO APIS ENABLED - WILL ENABLE REQUIRED${NC}"
+fi
+
+DOCKER_VERSION=$(docker --version 2>/dev/null || echo "NOT FOUND")
+if [[ "$DOCKER_VERSION" != "NOT FOUND" ]]; then
+    echo -e "${BOLD}${GREEN}[✓]${NC} ${BOLD}DOCKER: ${WHITE}${DOCKER_VERSION}${NC}"
+else
+    echo -e "${BOLD}${RED}[✗]${NC} ${BOLD}DOCKER NOT AVAILABLE - DEPLOYMENT MAY FAIL${NC}"
+fi
+
+echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+sleep 1
+
+
 # --- Function: Check and Enable APIs ---
 check_enable_api() {
     local API=$1
