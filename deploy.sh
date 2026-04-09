@@ -208,3 +208,68 @@ echo -e "${BOLD}${GREEN}[✓]${NC} ${BOLD}PUSH COMPLETED${NC}"
 # ==============================================
 #        DEPLOYING TO CLOUD RUN
 # ==============================================
+echo ""
+echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+echo -e "${BOLD}${WHITE}                    DEPLOYING TO CLOUD RUN${NC}"
+echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+
+gcloud run deploy vless-ws \
+    --image "$IMAGE" \
+    --platform managed \
+    --region "$REGION" \
+    --allow-unauthenticated \
+    --port 8080 \
+    --quiet &
+DEPLOY_PID=$!
+spinner $DEPLOY_PID "DEPLOYING TO CLOUD RUN (${REGION^^})"
+
+# ==============================================
+#        RETRIEVE SERVICE DETAILS
+# ==============================================
+echo ""
+echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+echo -e "${BOLD}${WHITE}                    RETRIEVING SERVICE DETAILS${NC}"
+echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+
+SERVICE_URL=$(gcloud run services describe vless-ws --region "$REGION" --format='value(status.url)' 2>/dev/null)
+CLEAN_HOST=$(echo "$SERVICE_URL" | sed 's|https://||')
+VLESS_URI="vless://${UUID}@${CLEAN_HOST}:443?encryption=none&security=tls&type=ws&path=${WS_PATH}#GCP-VLESS-PRVTSPYYY404"
+
+progress_bar 15 "FETCHING ENDPOINT DATA"
+
+# ==============================================
+#        DEPLOYMENT SUCCESS BANNER
+# ==============================================
+echo ""
+echo -e "${BOLD}${GREEN}╔══════════════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BOLD}${GREEN}║                                                                      ║${NC}"
+echo -e "${BOLD}${GREEN}║${NC}                    ${BOLD}${WHITE}█▀▄ █▀▀ █▀▄ █   █▀█ █▄█ █▀▄▀█ █▀▀ █▀█ ▀█▀${GREEN}                    ${NC}"
+echo -e "${BOLD}${GREEN}║${NC}                    ${BOLD}${WHITE}█░█ ██▄ █▀▄ █▄▄ █▄█ ░█░ █░▀░█ ██▄ █▀▄ ░█░${GREEN}                    ${NC}"
+echo -e "${BOLD}${GREEN}║                                                                      ║${NC}"
+echo -e "${BOLD}${GREEN}║${NC}                        ${BOLD}${GREEN}SUCCESSFULLY DEPLOYED${NC}                       ${GREEN}║${NC}"
+echo -e "${BOLD}${GREEN}║${NC}                    ${BOLD}${MAGENTA}CREATED BY PRVTSPYYY404${NC}                       ${GREEN}║${NC}"
+echo -e "${BOLD}${GREEN}║                                                                      ║${NC}"
+echo -e "${BOLD}${GREEN}╠══════════════════════════════════════════════════════════════════════╣${NC}"
+echo -e "${BOLD}${GREEN}║                                                                      ║${NC}"
+echo -e "${BOLD}${GREEN}║${NC}  ${BOLD}${YELLOW}ADDRESS:${NC}     ${BOLD}${WHITE}$CLEAN_HOST${GREEN}${NC}"
+echo -e "${BOLD}${GREEN}║${NC}  ${BOLD}${YELLOW}PORT:${NC}        ${BOLD}${WHITE}443${GREEN}${NC}"
+echo -e "${BOLD}${GREEN}║${NC}  ${BOLD}${YELLOW}UUID:${NC}        ${BOLD}${WHITE}$UUID${GREEN}${NC}"
+echo -e "${BOLD}${GREEN}║${NC}  ${BOLD}${YELLOW}WS PATH:${NC}     ${BOLD}${WHITE}$WS_PATH${GREEN}${NC}"
+echo -e "${BOLD}${GREEN}║${NC}  ${BOLD}${YELLOW}TRANSPORT:${NC}   ${BOLD}${WHITE}WEBSOCKET (WS)${GREEN}${NC}"
+echo -e "${BOLD}${GREEN}║${NC}  ${BOLD}${YELLOW}TLS:${NC}         ${BOLD}${WHITE}ENABLED (GOOGLE MANAGED)${GREEN}${NC}"
+echo -e "${BOLD}${GREEN}║${NC}  ${BOLD}${YELLOW}REGION:${NC}      ${BOLD}${WHITE}${REGION^^}${GREEN}${NC}"
+echo -e "${BOLD}${GREEN}║                                                                      ║${NC}"
+echo -e "${BOLD}${GREEN}╠══════════════════════════════════════════════════════════════════════╣${NC}"
+echo -e "${BOLD}${GREEN}║                                                                      ║${NC}"
+echo -e "${BOLD}${GREEN}║${NC}  ${BOLD}${CYAN}IMPORT URI:${NC}                                                       ${NC}"
+echo -e "${BOLD}${GREEN}║${NC}  ${BOLD}${WHITE}${VLESS_URI}${GREEN}${NC}"
+echo -e "${BOLD}${GREEN}║                                                                      ║${NC}"
+echo -e "${BOLD}${GREEN}╚══════════════════════════════════════════════════════════════════════╝${NC}"
+
+echo ""
+echo -e "${BOLD}${YELLOW}[NOTE]${NC} ${WHITE}DEFAULT UUID AND PATH ARE IN config.json. CHANGE THEM BEFORE REDEPLOYING.${NC}"
+echo -e "${BOLD}${CYAN}[INFO]${NC} ${WHITE}DEPLOYMENT COMPLETED BY PRVTSPYYY404${NC}"
+echo ""
+
+# Restore cursor
+tput cnorm
