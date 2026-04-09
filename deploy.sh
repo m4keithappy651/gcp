@@ -126,6 +126,46 @@ echo -e "${BOLD}${MAGENTA}══════════════════
 echo -e "${BOLD}${WHITE}                    DETECTING AVAILABLE REGIONS${NC}"
 echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
 
+# ==============================================
+#        FIX: PRE-CREATE CLOUD BUILD BUCKET
+# ==============================================
+fix_cloud_build_bucket() {
+    local PROJECT_ID=$1
+    local REGION=$2
+    
+    echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${BOLD}${WHITE}                    CHECKING CLOUD BUILD BUCKET${NC}"
+    echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+    
+    # Determine bucket location based on selected region
+    case "$REGION" in
+        us-central1|us-east1|us-west1|us-west2|us-west3|us-west4|us-east4|us-east5|us-south1)
+            BUCKET_LOCATION="$REGION"
+            ;;
+        *)
+            BUCKET_LOCATION="us-central1"
+            ;;
+    esac
+    
+    BUCKET_NAME="${PROJECT_ID}_cloudbuild"
+    
+    echo -e "${BOLD}${CYAN}[CHECK]${NC} Verifying Cloud Build bucket in ${WHITE}${BUCKET_LOCATION}${NC}..."
+    
+    # Check if bucket exists
+    if gsutil ls "gs://${BUCKET_NAME}" &>/dev/null; then
+        BUCKET_CURRENT_LOCATION=$(gsutil ls -L -b "gs://${BUCKET_NAME}" | grep "Location constraint:" | awk '{print $3}')
+        echo -e "${BOLD}${GREEN}[✓]${NC} Bucket exists in: ${WHITE}${BUCKET_CURRENT_LOCATION}${NC}"
+    else
+        echo -e "${BOLD}${YELLOW}[⟳]${NC} Creating Cloud Build bucket in ${WHITE}${BUCKET_LOCATION}${NC}..."
+        gsutil mb -l "${BUCKET_LOCATION}" "gs://${BUCKET_NAME}" &
+        spinner $! "CREATING STORAGE BUCKET"
+        echo -e "${BOLD}${GREEN}[✓]${NC} Bucket created successfully"
+    fi
+    
+    echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+    echo ""
+}
+
 # Fetch all available Cloud Run regions
 echo -e "${BOLD}${CYAN}[SCAN]${NC} FETCHING ACTIVE GCP REGIONS..."
 AVAILABLE_REGIONS=$(gcloud compute regions list --format="value(name)" 2>/dev/null | grep "^us-" | sort)
