@@ -121,4 +121,90 @@ for REG in $AVAILABLE_REGIONS; do
 done
 
 echo -e "${BOLD}${CYAN}----------------------------------------${NC}"
-echo -e "${BOLD}${GREEN}[A]${
+echo -e "${BOLD}${GREEN}[A]${NC} ${WHITE}AUTO-SELECT BEST REGION${NC}"
+echo -e "${BOLD}${RED}[Q]${NC} ${WHITE}QUIT DEPLOYMENT${NC}"
+echo ""
+
+read -p "$(echo -e "${BOLD}${YELLOW}ENTER SELECTION [1-$((COUNT-1))/A/Q]: ${NC}")" REGION_SELECTION
+
+if [[ "$REGION_SELECTION" == "Q" || "$REGION_SELECTION" == "q" ]]; then
+    echo -e "${BOLD}${RED}[✗] DEPLOYMENT CANCELLED BY USER${NC}"
+    exit 0
+elif [[ "$REGION_SELECTION" == "A" || "$REGION_SELECTION" == "a" ]]; then
+    # Auto-select first available US region
+    for REG in $AVAILABLE_REGIONS; do
+        if check_region_quota "$REG"; then
+            REGION="$REG"
+            echo -e "${BOLD}${GREEN}[✓]${NC} ${BOLD}AUTO-SELECTED REGION: ${WHITE}${REGION^^}${NC}"
+            break
+        fi
+    done
+    if [ -z "$REGION" ]; then
+        REGION="us-central1"
+        echo -e "${BOLD}${YELLOW}[!]${NC} ${BOLD}FALLBACK TO DEFAULT: ${WHITE}${REGION^^}${NC}"
+    fi
+else
+    SELECTED_INDEX=$((REGION_SELECTION - 1))
+    if [ $SELECTED_INDEX -ge 0 ] && [ $SELECTED_INDEX -lt ${#REGION_ARRAY[@]} ]; then
+        REGION="${REGION_ARRAY[$SELECTED_INDEX]}"
+        echo -e "${BOLD}${GREEN}[✓]${NC} ${BOLD}SELECTED REGION: ${WHITE}${REGION^^}${NC}"
+    else
+        REGION="us-central1"
+        echo -e "${BOLD}${YELLOW}[!]${NC} ${BOLD}INVALID SELECTION. USING DEFAULT: ${WHITE}${REGION^^}${NC}"
+    fi
+fi
+
+# ==============================================
+#        CONFIGURATION PARAMETERS
+# ==============================================
+echo ""
+echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+echo -e "${BOLD}${WHITE}                    CONFIGURATION PARAMETERS${NC}"
+echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+
+UUID=$(grep -o '"id": "[^"]*' config.json | cut -d'"' -f4)
+WS_PATH=$(grep -o '"path": "[^"]*' config.json | cut -d'"' -f4)
+IMAGE="gcr.io/$PROJECT_ID/vless-ws:latest"
+
+progress_bar 20 "LOADING CONFIGURATION"
+
+echo ""
+echo -e "${BOLD}${CYAN}┌────────────────────────────────────────────────────────────────────┐${NC}"
+echo -e "${BOLD}${CYAN}│${NC} ${BOLD}${YELLOW}UUID:${NC}     ${BOLD}${WHITE}$UUID${NC}"
+echo -e "${BOLD}${CYAN}│${NC} ${BOLD}${YELLOW}WS PATH:${NC}   ${BOLD}${WHITE}$WS_PATH${NC}"
+echo -e "${BOLD}${CYAN}│${NC} ${BOLD}${YELLOW}REGION:${NC}    ${BOLD}${WHITE}${REGION^^}${NC}"
+echo -e "${BOLD}${CYAN}│${NC} ${BOLD}${YELLOW}IMAGE:${NC}     ${BOLD}${WHITE}$IMAGE${NC}"
+echo -e "${BOLD}${CYAN}└────────────────────────────────────────────────────────────────────┘${NC}"
+
+# ==============================================
+#        BUILDING DOCKER IMAGE
+# ==============================================
+echo ""
+echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+echo -e "${BOLD}${WHITE}                    BUILDING DOCKER IMAGE${NC}"
+echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+
+docker build -t "$IMAGE" . --quiet &
+BUILD_PID=$!
+spinner $BUILD_PID "BUILDING CONTAINER IMAGE"
+
+IMAGE_SHA=$(docker inspect "$IMAGE" --format='{{.Id}}' 2>/dev/null | cut -d: -f2 | cut -c1-12)
+echo -e "${BOLD}${GREEN}[✓]${NC} ${BOLD}BUILD COMPLETED ${WHITE}[SHA: ${IMAGE_SHA}]${NC}"
+
+# ==============================================
+#        PUSHING TO CONTAINER REGISTRY
+# ==============================================
+echo ""
+echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+echo -e "${BOLD}${WHITE}                    PUSHING TO CONTAINER REGISTRY${NC}"
+echo -e "${BOLD}${MAGENTA}══════════════════════════════════════════════════════════════════════${NC}"
+
+docker push "$IMAGE" --quiet &
+PUSH_PID=$!
+spinner $PUSH_PID "UPLOADING TO GCR"
+
+echo -e "${BOLD}${GREEN}[✓]${NC} ${BOLD}PUSH COMPLETED${NC}"
+
+# ==============================================
+#        DEPLOYING TO CLOUD RUN
+# ==============================================
