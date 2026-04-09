@@ -217,7 +217,6 @@ echo -e "${BOLD}${MAGENTA}══════════════════
 
 docker build -t "$IMAGE" . --quiet &
 BUILD_PID=$!
-spinner $BUILD_PID "BUILDING CONTAINER IMAGE"
 
 IMAGE_SHA=$(docker inspect "$IMAGE" --format='{{.Id}}' 2>/dev/null | cut -d: -f2 | cut -c1-12)
 echo -e "${BOLD}${GREEN}[✓]${NC} ${BOLD}BUILD COMPLETED ${WHITE}[SHA: ${IMAGE_SHA}]${NC}"
@@ -232,7 +231,6 @@ echo -e "${BOLD}${MAGENTA}══════════════════
 
 docker push "$IMAGE" --quiet &
 PUSH_PID=$!
-spinner $PUSH_PID "UPLOADING TO GCR"
 
 echo -e "${BOLD}${GREEN}[✓]${NC} ${BOLD}PUSH COMPLETED${NC}"
 
@@ -252,7 +250,6 @@ gcloud run deploy vless-ws \
     --port 8080 \
     --quiet &
 DEPLOY_PID=$!
-spinner $DEPLOY_PID "DEPLOYING TO CLOUD RUN (${REGION^^})"
 
 # ==============================================
 #        RETRIEVE SERVICE DETAILS
@@ -266,7 +263,6 @@ SERVICE_URL=$(gcloud run services describe vless-ws --region "$REGION" --format=
 CLEAN_HOST=$(echo "$SERVICE_URL" | sed 's|https://||')
 VLESS_URI="vless://${UUID}@${CLEAN_HOST}:443?encryption=none&security=tls&type=ws&path=${WS_PATH}#GCP-VLESS-PRVTSPYYY404"
 
-progress_bar 15 "FETCHING ENDPOINT DATA"
 
 # ==============================================
 #        DEPLOYMENT SUCCESS BANNER
