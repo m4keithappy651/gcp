@@ -12,5 +12,6 @@ COPY entrypoint.sh /entrypoint.sh
 EXPOSE 8080
 
 # Make entrypoint executable and set it
+RUN apt-get update && apt-get install -y gettext && rm -rf /var/lib/apt/lists/*
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
