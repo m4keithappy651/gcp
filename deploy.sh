@@ -238,10 +238,11 @@ echo -e "${C_HEADER}════════════════════
 
 DEPLOY_PUBLIC_SUCCESS=false
 IAM_POLICY_FAILED=false
+DEPLOY_LOG="/tmp/deploy_output.log"
 
-# Attempt 1: Public deployment (with allow-unauthenticated)
+# Attempt 1: Public deployment (output to log file, no variable capture)
 echo -e "${C_INFO}[*]${RESET} Attempting public deployment..."
-DEPLOY_OUTPUT=$(gcloud run deploy vless-ws \
+gcloud run deploy vless-ws \
     --image "$IMAGE" \
     --platform managed \
     --region "$REGION" \
@@ -250,20 +251,25 @@ DEPLOY_OUTPUT=$(gcloud run deploy vless-ws \
     --cpu "$CPU" \
     --memory "$MEMORY" \
     --timeout 3600 \
-    2>&1)
+    --quiet > "$DEPLOY_LOG" 2>&1
 DEPLOY_EXIT=$?
+
+# Display captured output
+if [ -s "$DEPLOY_LOG" ]; then
+    cat "$DEPLOY_LOG"
+fi
 
 if [ $DEPLOY_EXIT -eq 0 ]; then
     DEPLOY_PUBLIC_SUCCESS=true
     echo -e "${C_SUCCESS}[✔]${RESET} Public deployment successful"
 else
-    # Check for IAM policy / Domain Restricted Sharing error
-    if echo "$DEPLOY_OUTPUT" | grep -q "FAILED_PRECONDITION.*Setting IAM policy\|Domain Restricted Sharing"; then
+    if grep -q "FAILED_PRECONDITION.*Setting IAM policy\|Domain Restricted Sharing\|412" "$DEPLOY_LOG" 2>/dev/null; then
         IAM_POLICY_FAILED=true
         echo -e "${C_WARN}[!]${RESET} Public deployment blocked by organization policy (Domain Restricted Sharing)"
     else
-        echo -e "${C_ERROR}[✘]${RESET} Deployment failed with unexpected error:"
-        echo "$DEPLOY_OUTPUT"
+        echo -e "${C_ERROR}[✘]${RESET} Deployment failed with error:"
+        cat "$DEPLOY_LOG"
+        rm -f "$DEPLOY_LOG"
         exit 1
     fi
 fi
@@ -272,7 +278,7 @@ fi
 if [ "$IAM_POLICY_FAILED" = true ]; then
     echo ""
     echo -e "${C_INFO}[*]${RESET} Redeploying as private service (authentication required)..."
-    DEPLOY_OUTPUT=$(gcloud run deploy vless-ws \
+    gcloud run deploy vless-ws \
         --image "$IMAGE" \
         --platform managed \
         --region "$REGION" \
@@ -280,17 +286,24 @@ if [ "$IAM_POLICY_FAILED" = true ]; then
         --cpu "$CPU" \
         --memory "$MEMORY" \
         --timeout 3600 \
-        2>&1)
+        --quiet > "$DEPLOY_LOG" 2>&1
     DEPLOY_EXIT=$?
+    
+    if [ -s "$DEPLOY_LOG" ]; then
+        cat "$DEPLOY_LOG"
+    fi
+    
     if [ $DEPLOY_EXIT -eq 0 ]; then
         echo -e "${C_SUCCESS}[✔]${RESET} Private deployment successful"
     else
         echo -e "${C_ERROR}[✘]${RESET} Private deployment also failed:"
-        echo "$DEPLOY_OUTPUT"
+        cat "$DEPLOY_LOG"
+        rm -f "$DEPLOY_LOG"
         exit 1
     fi
 fi
 
+rm -f "$DEPLOY_LOG"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
@@ -308,7 +321,6 @@ if [ "$IAM_POLICY_FAILED" = true ]; then
     SA_NAME="vless-client-sa"
     SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
     
-    # Create service account
     echo -e "${C_INFO}[*]${RESET} Creating service account: ${BOLD}${SA_NAME}${RESET}"
     if gcloud iam service-accounts describe "$SA_EMAIL" &>/dev/null; then
         echo -e "${C_SUCCESS}[✔]${RESET} Service account already exists"
@@ -319,7 +331,6 @@ if [ "$IAM_POLICY_FAILED" = true ]; then
         echo -e "${C_SUCCESS}[✔]${RESET} Service account created"
     fi
     
-    # Grant invoker role
     echo -e "${C_INFO}[*]${RESET} Granting Cloud Run Invoker permission..."
     gcloud run services add-iam-policy-binding vless-ws \
         --region="$REGION" \
@@ -328,7 +339,6 @@ if [ "$IAM_POLICY_FAILED" = true ]; then
         --quiet
     echo -e "${C_SUCCESS}[✔]${RESET} Invoker role granted"
     
-    # Create and download key
     echo -e "${C_INFO}[*]${RESET} Generating service account key..."
     KEY_FILE="$HOME/vless-client-key.json"
     gcloud iam service-accounts keys create "$KEY_FILE" \
@@ -336,7 +346,6 @@ if [ "$IAM_POLICY_FAILED" = true ]; then
         --quiet
     echo -e "${C_SUCCESS}[✔]${RESET} Key saved to: ${BOLD}${KEY_FILE}${RESET}"
     
-    # Generate authentication helper script
     cat > "$HOME/vless-auth.sh" <<'AUTH_EOF'
 #!/bin/bash
 KEY_FILE="$HOME/vless-client-key.json"
@@ -404,6 +413,4 @@ echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Memory:${RESET}      ${BOLD}${MEMO
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Timeout:${RESET}     ${BOLD}3600s${RESET}"
 if [ "$IAM_POLICY_FAILED" = true ]; then
     echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Access:${RESET}      ${BOLD}Private (authentication required)${RESET}"
-else
-    echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Access:${RESET}      ${BOLD}Public${RESET}"
-fi
+e
