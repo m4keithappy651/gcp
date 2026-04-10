@@ -178,18 +178,17 @@ echo -e "${C_SUCCESS}[✔]${RESET} Push complete"
 
 # Deploy with HTTP/2 for gRPC
 echo -e "${C_INFO}[*]${RESET} Deploying to Cloud Run..."
-gcloud run deploy "$SERVICE_NAME" \
-    --image "$IMAGE" \
+gcloud run deploy vless-ws \
+    --image gcr.io/$PROJECT_ID/vless-ws \
     --platform managed \
-    --region "$REGION" \
+    --region us-central1 \
     --allow-unauthenticated \
     --port 8080 \
-    --cpu "$CPU" \
-    --memory "$MEMORY" \
+    --cpu 1 \
+    --memory 1Gi \
     --timeout 3600 \
-    --use-http2 \
     --quiet
-
+    
 SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)' 2>/dev/null)
 CLEAN_HOST=$(echo "$SERVICE_URL" | sed 's|https://||')
 
