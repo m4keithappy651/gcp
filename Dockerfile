@@ -1,19 +1,30 @@
 FROM teddysun/xray:latest
 
-# Install Go to compile a tiny health check server
-RUN apk update && apk add --no-cache go git && rm -rf /var/cache/apk/*
+# Python is already present in the base image. No additional packages needed.
+# Create a simple Python health check server script
+RUN echo '#!/usr/bin/env python3\n\
+import http.server\n\
+import socketserver\n\
+import sys\n\
+\n\
+class HealthHandler(http.server.SimpleHTTPRequestHandler):\n\
+    def do_GET(self):\n\
+        self.send_response(200)\n\
+        self.send_header("Content-type", "text/plain")\n\
+        self.end_headers()\n\
+        self.wfile.write(b"OK")\n\
+\n\
+if __name__ == "__main__":\n\
+    with socketserver.TCPServer(("0.0.0.0", 8080), HealthHandler) as httpd:\n\
+        httpd.serve_forever()\n\
+' > /health.py && chmod +x /health.py
 
-# Create a simple Go HTTP health server
-RUN echo 'package main; import "net/http"; func main() { http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }); http.ListenAndServe(":8080", nil) }' > /health.go
-
-# Compile the health server
-RUN go build -o /health /health.go
-
-# Copy Xray configuration
 COPY config.json /etc/xray/config.json
 
-# Create entrypoint script that runs both services
-RUN echo '#!/bin/sh\n/health &\n/usr/bin/xray run -c /etc/xray/config.json' > /entrypoint.sh \
+# Entrypoint starts both the health server and Xray
+RUN echo '#!/bin/sh\n\
+python3 /health.py &\n\
+/usr/bin/xray run -c /etc/xray/config.json' > /entrypoint.sh \
     && chmod +x /entrypoint.sh
 
 EXPOSE 8080
