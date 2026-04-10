@@ -153,28 +153,16 @@ get_online_regions() {
     done | sort
 }
 
-# --- Region Selection (online only) ---
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "REGION SELECTION")${RESET}"
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-
-echo -e "${C_INFO}[*]${RESET} Fetching online Cloud Run regions..."
-ONLINE_REGIONS=($(get_online_regions))
-
-if [ ${#ONLINE_REGIONS[@]} -eq 0 ]; then
-    echo -e "${C_ERROR}[✘]${RESET} No online regions found. Using fallback: us-central1"
-    REGION="us-central1"
-else
-    echo -e "${C_SUCCESS}[✔]${RESET} Available regions (online & Cloud Run supported):"
-    echo ""
-    for i in "${!ONLINE_REGIONS[@]}"; do
-        idx=$((i+1))
-        if [ $idx -lt 10 ]; then
-            echo -e "  ${C_ACCENT}[${idx}]${RESET}  ${BOLD}${ONLINE_REGIONS[$i]}${RESET}"
-        else
-            echo -e "  ${C_ACCENT}[${idx}]${RESET} ${BOLD}${ONLINE_REGIONS[$i]}${RESET}"
-        fi
-    done
+# Pre-verified working regions
+PRIMARY_REGIONS=("us-central1" "us-east1" "us-west1" "europe-west1" "asia-east1")
+echo -e "${C_INFO}[*]${RESET} Detecting available regions..."
+CLOUD_RUN_REGIONS=$(gcloud run regions list --format="value(name)" 2>/dev/null)
+AVAILABLE_REGIONS=()
+for reg in "${PRIMARY_REGIONS[@]}"; do
+    if echo "$CLOUD_RUN_REGIONS" | grep -qx "$reg"; then
+        AVAILABLE_REGIONS+=("$reg")
+    fi
+done
     echo ""
     read -p "$(echo -e "${C_INFO}[?]${RESET} Select region [1-${#ONLINE_REGIONS[@]}]: ")" REGION_CHOICE
     if [[ "$REGION_CHOICE" =~ ^[0-9]+$ ]] && [ "$REGION_CHOICE" -ge 1 ] && [ "$REGION_CHOICE" -le ${#ONLINE_REGIONS[@]} ]; then
