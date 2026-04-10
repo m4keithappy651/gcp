@@ -262,3 +262,27 @@ echo -e "${C_HEADER}════════════════════
 echo ""
 echo -e "${C_INFO}[i]${RESET} Deployment created by prvtspyyy"
 echo ""
+
+# ==============================================
+#        AUTOMATIC NETWORK MONITOR (BACKGROUND)
+# ==============================================
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo -e "${C_PLAIN}$(math_bold "STARTING NETWORK MONITOR")${RESET}"
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+
+# Check if network-monitor.sh exists and launch it in background
+if [ -f "./network-monitor.sh" ]; then
+    echo -e "${C_INFO}[*]${RESET} Launching network monitor in background..."
+    chmod +x ./network-monitor.sh
+    nohup ./network-monitor.sh "$SERVICE_NAME" "$REGION" > /dev/null 2>&1 &
+    MONITOR_PID=$!
+    echo -e "${C_SUCCESS}[✔]${RESET} Network monitor started (PID: $MONITOR_PID)"
+    echo -e "${C_INFO}[*]${RESET} Logs will be saved to: ${BOLD}~/network-logs/${RESET}"
+    echo -e "${C_INFO}[*]${RESET} To stop monitor: ${BOLD}kill $MONITOR_PID${RESET}"
+else
+    echo -e "${C_WARN}[!]${RESET} network-monitor.sh not found. Skipping."
+    echo -e "${C_INFO}[*]${RESET} Add network-monitor.sh to your repository for automatic logging."
+fi
+
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo ""
