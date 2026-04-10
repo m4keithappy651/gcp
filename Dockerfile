@@ -1,17 +1,19 @@
 FROM teddysun/xray:latest
 
-# Install busybox for a lightweight, reliable HTTP server
-RUN apk update && apk add --no-cache busybox-extras && rm -rf /var/cache/apk/*
+# Install Go to compile a tiny health check server
+RUN apk update && apk add --no-cache go git && rm -rf /var/cache/apk/*
 
-# Copy configuration
+# Create a simple Go HTTP health server
+RUN echo 'package main; import "net/http"; func main() { http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }); http.ListenAndServe(":8080", nil) }' > /health.go
+
+# Compile the health server
+RUN go build -o /health /health.go
+
+# Copy Xray configuration
 COPY config.json /etc/xray/config.json
 
-# Create a robust entrypoint script
-RUN echo '#!/bin/sh\n\
-# Start a simple HTTP server for Cloud Run health checks on port 8080\n\
-busybox httpd -f -p 8080 -h /tmp &\n\
-# Start Xray\n\
-/usr/bin/xray run -c /etc/xray/config.json' > /entrypoint.sh \
+# Create entrypoint script that runs both services
+RUN echo '#!/bin/sh\n/health &\n/usr/bin/xray run -c /etc/xray/config.json' > /entrypoint.sh \
     && chmod +x /entrypoint.sh
 
 EXPOSE 8080
