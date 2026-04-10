@@ -382,6 +382,120 @@ if [ "$IAM_POLICY_FAILED" = true ]; then
         echo -e "${C_SUCCESS}[✔]${RESET} Private deployment successful"
     else
         echo -e "${C_ERROR}[✘]${RESET} Private deployment failed (check log above)"
+# ==============================================
+#        QUOTA-RESILIENT CLOUD RUN DEPLOYMENT
+# ==============================================
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo -e "${C_PLAIN}$(math_bold "DEPLOYING TO CLOUD RUN")${RESET}"
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+
+IAM_POLICY_FAILED=false
+QUOTA_FAILED=false
+DEPLOY_LOG="/tmp/deploy_output.log"
+DEPLOY_SUCCESS=false
+
+# Function to attempt deployment with specific memory
+attempt_deploy_with_memory() {
+    local MEM=$1
+    local ALLOW_UNAUTH=$2
+    
+    echo -e "${C_INFO}[*]${RESET} Attempting deployment with Memory: ${BOLD}${MEM}${RESET}"
+    
+    if [ "$ALLOW_UNAUTH" = "true" ]; then
+        gcloud run deploy "${SERVICE_NAME}" \
+            --image "$IMAGE" \
+            --platform managed \
+            --region "$REGION" \
+            --allow-unauthenticated \
+            --port 8080 \
+            --cpu "$CPU" \
+            --memory "$MEM" \
+            --timeout 3600 \
+            --quiet > "$DEPLOY_LOG" 2>&1
+    else
+        gcloud run deploy "${SERVICE_NAME}" \
+            --image "$IMAGE" \
+            --platform managed \
+            --region "$REGION" \
+            --port 8080 \
+            --cpu "$CPU" \
+            --memory "$MEM" \
+            --timeout 3600 \
+            --quiet > "$DEPLOY_LOG" 2>&1
+    fi
+    return $?
+}
+
+# Attempt 1: Public deployment with user-selected memory
+echo -e "${C_INFO}[*]${RESET} Attempting public deployment with selected memory (${BOLD}${MEMORY}${RESET})..."
+attempt_deploy_with_memory "$MEMORY" "true"
+DEPLOY_EXIT=$?
+
+if [ -s "$DEPLOY_LOG" ]; then
+    cat "$DEPLOY_LOG"
+fi
+
+# Check for quota error
+if grep -q "Quota exceeded\|quota.*exceeded\|insufficient quota\|limit.*exceeded\|412.*quota" "$DEPLOY_LOG" 2>/dev/null; then
+    QUOTA_FAILED=true
+    echo -e "${C_WARN}[!]${RESET} Quota exceeded for memory: ${BOLD}${MEMORY}${RESET}"
+elif grep -q "FAILED_PRECONDITION.*Setting IAM policy\|Domain Restricted Sharing" "$DEPLOY_LOG" 2>/dev/null; then
+    IAM_POLICY_FAILED=true
+    echo -e "${C_WARN}[!]${RESET} Public deployment blocked by organization policy"
+elif [ $DEPLOY_EXIT -eq 0 ]; then
+    DEPLOY_SUCCESS=true
+    echo -e "${C_SUCCESS}[✔]${RESET} Public deployment successful"
+fi
+
+# Attempt 2: If quota failed, retry with 1Gi memory
+if [ "$QUOTA_FAILED" = true ]; then
+    echo ""
+    echo -e "${C_WARN}[!]${RESET} Automatically retrying with reduced memory: ${BOLD}1Gi${RESET}"
+    MEMORY="1Gi"
+    attempt_deploy_with_memory "$MEMORY" "true"
+    DEPLOY_EXIT=$?
+    
+    if [ -s "$DEPLOY_LOG" ]; then
+        cat "$DEPLOY_LOG"
+    fi
+    
+    if grep -q "FAILED_PRECONDITION.*Setting IAM policy\|Domain Restricted Sharing" "$DEPLOY_LOG" 2>/dev/null; then
+        IAM_POLICY_FAILED=true
+    elif [ $DEPLOY_EXIT -eq 0 ]; then
+        DEPLOY_SUCCESS=true
+        echo -e "${C_SUCCESS}[✔]${RESET} Public deployment successful with 1Gi memory"
+    fi
+fi
+
+# Attempt 3: Private deployment (if IAM policy blocked public or previous attempts failed)
+if [ "$IAM_POLICY_FAILED" = true ] || [ "$DEPLOY_SUCCESS" = false ]; then
+    echo ""
+    echo -e "${C_INFO}[*]${RESET} Attempting private deployment with Memory: ${BOLD}${MEMORY}${RESET}..."
+    
+    if [ "$IAM_POLICY_FAILED" = true ]; then
+        echo -e "${C_WARN}[!]${RESET} Switching to private deployment due to organization policy"
+    fi
+    
+    gcloud run deploy "${SERVICE_NAME}" \
+        --image "$IMAGE" \
+        --platform managed \
+        --region "$REGION" \
+        --port 8080 \
+        --cpu "$CPU" \
+        --memory "$MEMORY" \
+        --timeout 3600 \
+        --quiet > "$DEPLOY_LOG" 2>&1
+    DEPLOY_EXIT=$?
+    
+    if [ -s "$DEPLOY_LOG" ]; then
+        cat "$DEPLOY_LOG"
+    fi
+    
+    if [ $DEPLOY_EXIT -eq 0 ]; then
+        DEPLOY_SUCCESS=true
+        echo -e "${C_SUCCESS}[✔]${RESET} Private deployment successful"
+    else
+        echo -e "${C_ERROR}[✘]${RESET} Private deployment failed. Check log above."
         rm -f "$DEPLOY_LOG"
         exit 1
     fi
@@ -390,7 +504,6 @@ fi
 rm -f "$DEPLOY_LOG"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
-
 
 # --- Retrieve Service URL ---
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" --region "$REGION" --format='value(status.url)' 2>/dev/null)
