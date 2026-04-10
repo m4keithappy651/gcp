@@ -208,7 +208,7 @@ This project exists because of your patience, detailed feedback, and relentless 
 
 Special thanks to:
 
-· prvtspyyy404 – for the vision, the name, and the insistence on perfection.
+· my group members/volunteers/assistants and to my friends– for the vision, the name, and the insistence on perfection.
 · Everyone who tested this in Qwiklabs, personal GCP accounts, and beyond – your logs made the difference.
 
 If this tool saves you time or helps you bypass restrictions, I've done my job. If you find a new edge case or a bug, open an issue – I'll be here.
