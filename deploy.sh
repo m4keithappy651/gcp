@@ -249,75 +249,111 @@ echo -e "${C_SUCCESS}[✔]${RESET} Push completed"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
-# --- Deploy to Cloud Run with Public Access Attempt and Auto-Fallback ---
+# --- Deploy to Cloud Run with Hang Protection ---
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo -e "${C_PLAIN}$(math_bold "DEPLOYING TO CLOUD RUN")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
-DEPLOY_PUBLIC_SUCCESS=false
-IAM_POLICY_FAILED=false
+DEPLOY_TIMEOUT=180  # 3 minutes max wait
 DEPLOY_LOG="/tmp/deploy_output.log"
+IAM_POLICY_FAILED=false
 
-# Attempt 1: Public deployment
-echo -e "${C_INFO}[*]${RESET} Attempting public deployment..."
-gcloud run deploy vless-ws \
-    --image "$IMAGE" \
-    --platform managed \
-    --region "$REGION" \
-    --allow-unauthenticated \
-    --port 8080 \
-    --cpu "$CPU" \
-    --memory "$MEMORY" \
-    --timeout 3600 \
-    --quiet > "$DEPLOY_LOG" 2>&1
-DEPLOY_EXIT=$?
-
-if [ -s "$DEPLOY_LOG" ]; then
-    cat "$DEPLOY_LOG"
-fi
-
-if [ $DEPLOY_EXIT -eq 0 ]; then
-    DEPLOY_PUBLIC_SUCCESS=true
-    echo -e "${C_SUCCESS}[✔]${RESET} Public deployment successful"
-else
-    if grep -q "FAILED_PRECONDITION.*Setting IAM policy\|Domain Restricted Sharing\|412" "$DEPLOY_LOG" 2>/dev/null; then
-        IAM_POLICY_FAILED=true
-        echo -e "${C_WARN}[!]${RESET} Public deployment blocked by organization policy (Domain Restricted Sharing)"
-    else
-        echo -e "${C_ERROR}[✘]${RESET} Deployment failed with error:"
-        cat "$DEPLOY_LOG"
-        rm -f "$DEPLOY_LOG"
-        exit 1
-    fi
-fi
-
-# Attempt 2: Private deployment
-if [ "$IAM_POLICY_FAILED" = true ]; then
-    echo ""
-    echo -e "${C_INFO}[*]${RESET} Redeploying as private service..."
-    gcloud run deploy vless-ws \
-        --image "$IMAGE" \
-        --platform managed \
-        --region "$REGION" \
-        --port 8080 \
-        --cpu "$CPU" \
-        --memory "$MEMORY" \
-        --timeout 3600 \
-        --quiet > "$DEPLOY_LOG" 2>&1
-    DEPLOY_EXIT=$?
+# Function to attempt deployment with timeout
+attempt_deploy() {
+    local allow_unauth=$1
+    local cmd_pid
     
+    echo -e "${C_INFO}[*]${RESET} Attempting deployment (timeout: ${DEPLOY_TIMEOUT}s)..."
+    
+    # Build the command
+    if [ "$allow_unauth" = "true" ]; then
+        timeout ${DEPLOY_TIMEOUT} gcloud run deploy vless-ws \
+            --image "$IMAGE" \
+            --platform managed \
+            --region "$REGION" \
+            --allow-unauthenticated \
+            --port 8080 \
+            --cpu "$CPU" \
+            --memory "$MEMORY" \
+            --timeout 3600 \
+            --quiet > "$DEPLOY_LOG" 2>&1 &
+    else
+        timeout ${DEPLOY_TIMEOUT} gcloud run deploy vless-ws \
+            --image "$IMAGE" \
+            --platform managed \
+            --region "$REGION" \
+            --port 8080 \
+            --cpu "$CPU" \
+            --memory "$MEMORY" \
+            --timeout 3600 \
+            --quiet > "$DEPLOY_LOG" 2>&1 &
+    fi
+    cmd_pid=$!
+    
+    # Wait for the timeout command to finish
+    wait $cmd_pid 2>/dev/null
+    local exit_code=$?
+    
+    # Display log output
     if [ -s "$DEPLOY_LOG" ]; then
         cat "$DEPLOY_LOG"
     fi
     
-    if [ $DEPLOY_EXIT -eq 0 ]; then
-        echo -e "${C_SUCCESS}[✔]${RESET} Private deployment successful"
+    return $exit_code
+}
+
+# Attempt 1: Public deployment
+attempt_deploy "true"
+DEPLOY_EXIT=$?
+
+if [ $DEPLOY_EXIT -eq 0 ]; then
+    echo -e "${C_SUCCESS}[✔]${RESET} Public deployment command completed"
+elif [ $DEPLOY_EXIT -eq 124 ]; then
+    echo -e "${C_WARN}[!]${RESET} Deployment command timed out after ${DEPLOY_TIMEOUT} seconds"
+else
+    if grep -q "FAILED_PRECONDITION.*Setting IAM policy\|Domain Restricted Sharing\|412" "$DEPLOY_LOG" 2>/dev/null; then
+        IAM_POLICY_FAILED=true
+        echo -e "${C_WARN}[!]${RESET} Public deployment blocked by organization policy"
     else
-        echo -e "${C_ERROR}[✘]${RESET} Private deployment also failed:"
-        cat "$DEPLOY_LOG"
-        rm -f "$DEPLOY_LOG"
-        exit 1
+        echo -e "${C_ERROR}[✘]${RESET} Deployment command failed (exit code: $DEPLOY_EXIT)"
     fi
+fi
+
+# If public failed due to IAM policy, try private deployment
+if [ "$IAM_POLICY_FAILED" = true ] || [ $DEPLOY_EXIT -eq 124 ] || [ $DEPLOY_EXIT -ne 0 ]; then
+    if [ "$IAM_POLICY_FAILED" = false ]; then
+        echo -e "${C_INFO}[*]${RESET} Retrying with private deployment..."
+    else
+        echo -e "${C_INFO}[*]${RESET} Switching to private deployment (authentication required)..."
+    fi
+    
+    attempt_deploy "false"
+    DEPLOY_EXIT=$?
+    
+    if [ $DEPLOY_EXIT -eq 0 ]; then
+        echo -e "${C_SUCCESS}[✔]${RESET} Private deployment command completed"
+    elif [ $DEPLOY_EXIT -eq 124 ]; then
+        echo -e "${C_WARN}[!]${RESET} Private deployment command timed out"
+    else
+        echo -e "${C_ERROR}[✘]${RESET} Private deployment command failed (exit code: $DEPLOY_EXIT)"
+    fi
+fi
+
+# Verify if service actually exists (may have succeeded even if command timed out)
+echo -e "${C_INFO}[*]${RESET} Verifying service existence..."
+if gcloud run services describe vless-ws --region "$REGION" --format="value(status.url)" &>/dev/null; then
+    echo -e "${C_SUCCESS}[✔]${RESET} Service is live"
+    DEPLOY_SUCCESS=true
+else
+    DEPLOY_SUCCESS=false
+    echo -e "${C_WARN}[!]${RESET} Service not found in region ${REGION}"
+fi
+
+# If all attempts failed but we suspect org policy, set flag for later auth setup
+if [ "$DEPLOY_SUCCESS" = false ] && [ "$IAM_POLICY_FAILED" = true ]; then
+    echo -e "${C_WARN}[!]${RESET} Service may require manual deployment due to organization restrictions"
+    echo -e "${C_INFO}[*]${RESET} Try running manually:"
+    echo -e "    ${GREEN}gcloud run deploy vless-ws --image $IMAGE --platform managed --region $REGION --port 8080 --cpu $CPU --memory $MEMORY --timeout 3600${RESET}"
 fi
 
 rm -f "$DEPLOY_LOG"
