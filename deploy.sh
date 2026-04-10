@@ -391,91 +391,13 @@ rm -f "$DEPLOY_LOG"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
+
 # --- Retrieve Service URL ---
-SERVICE_URL=$(gcloud run services describe vless-ws --region "$REGION" --format='value(status.url)' 2>/dev/null)
+SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" --region "$REGION" --format='value(status.url)' 2>/dev/null)
 CLEAN_HOST=$(echo "$SERVICE_URL" | sed 's|https://||')
-VLESS_URI="vless://${UUID}@${CLEAN_HOST}:443?encryption=none&security=tls&type=ws&path=${WS_PATH}#GCP-VLESS-PRVTSPYYY"
 
-# --- Post-Deployment: Service Account Setup (if private deployment) ---
-if [ "$IAM_POLICY_FAILED" = true ]; then
-    echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-    echo -e "${C_PLAIN}$(math_bold "CONFIGURING SERVICE AUTHENTICATION")${RESET}"
-    echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-    
-    SA_NAME="vless-client-sa"
-    SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
-    
-    echo -e "${C_INFO}[*]${RESET} Creating service account: ${BOLD}${SA_NAME}${RESET}"
-    if gcloud iam service-accounts describe "$SA_EMAIL" &>/dev/null; then
-        echo -e "${C_SUCCESS}[✔]${RESET} Service account already exists"
-    else
-        gcloud iam service-accounts create "$SA_NAME" \
-            --display-name="VLESS Client Service Account" \
-            --quiet
-        echo -e "${C_SUCCESS}[✔]${RESET} Service account created"
-    fi
-    
-    echo -e "${C_INFO}[*]${RESET} Granting Cloud Run Invoker permission..."
-    gcloud run services add-iam-policy-binding vless-ws \
-        --region="$REGION" \
-        --member="serviceAccount:${SA_EMAIL}" \
-        --role="roles/run.invoker" \
-        --quiet
-    echo -e "${C_SUCCESS}[✔]${RESET} Invoker role granted"
-    
-    echo -e "${C_INFO}[*]${RESET} Generating service account key..."
-    KEY_FILE="$HOME/vless-client-key.json"
-    gcloud iam service-accounts keys create "$KEY_FILE" \
-        --iam-account="$SA_EMAIL" \
-        --quiet
-    echo -e "${C_SUCCESS}[✔]${RESET} Key saved to: ${BOLD}${KEY_FILE}${RESET}"
-    
-    cat > "$HOME/vless-auth.sh" <<'AUTH_EOF'
-#!/bin/bash
-KEY_FILE="$HOME/vless-client-key.json"
-SERVICE_URL="PLACEHOLDER_URL"
-
-if [ ! -f "$KEY_FILE" ]; then
-    echo "Error: Service account key not found at $KEY_FILE"
-    exit 1
-fi
-
-TOKEN=$(gcloud auth print-identity-token \
-    --impersonate-service-account="$(jq -r .client_email $KEY_FILE)" \
-    --audiences="$SERVICE_URL" \
-    --include-email 2>/dev/null)
-
-if [ -n "$TOKEN" ]; then
-    echo "Bearer $TOKEN"
-else
-    echo "Error: Failed to generate token"
-    exit 1
-fi
-AUTH_EOF
-    sed -i "s|PLACEHOLDER_URL|$SERVICE_URL|g" "$HOME/vless-auth.sh"
-    chmod +x "$HOME/vless-auth.sh"
-    echo -e "${C_SUCCESS}[✔]${RESET} Authentication script created: ${BOLD}$HOME/vless-auth.sh${RESET}"
-    
-    echo ""
-    echo -e "${C_WARN}╔════════════════════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${C_WARN}║${RESET} ${BOLD}⚠️  CLIENT AUTHENTICATION REQUIRED${RESET}                                               ${C_WARN}║${RESET}"
-    echo -e "${C_WARN}╠════════════════════════════════════════════════════════════════════════════╣${RESET}"
-    echo -e "${C_WARN}║${RESET} This service is PRIVATE. Your VLESS client must authenticate.                 ${C_WARN}║${RESET}"
-    echo -e "${C_WARN}║${RESET}                                                                                ${C_WARN}║${RESET}"
-    echo -e "${C_WARN}║${RESET} ${C_ACCENT}Option 1 (Automated):${RESET} Run before connecting:                                  ${C_WARN}║${RESET}"
-    echo -e "${C_WARN}║${RESET}     ${GREEN}$HOME/vless-auth.sh${RESET}                                            ${C_WARN}║${RESET}"
-    echo -e "${C_WARN}║${RESET}                                                                                ${C_WARN}║${RESET}"
-    echo -e "${C_WARN}║${RESET} ${C_ACCENT}Option 2 (Manual):${RESET} Generate token with:                                        ${C_WARN}║${RESET}"
-    echo -e "${C_WARN}║${RESET}     ${GREEN}gcloud auth print-identity-token \\${RESET}                                 ${C_WARN}║${RESET}"
-    echo -e "${C_WARN}║${RESET}     ${GREEN}  --impersonate-service-account=${SA_EMAIL} \\${RESET}                          ${C_WARN}║${RESET}"
-    echo -e "${C_WARN}║${RESET}     ${GREEN}  --audiences=${SERVICE_URL}${RESET}                                           ${C_WARN}║${RESET}"
-    echo -e "${C_WARN}║${RESET}                                                                                ${C_WARN}║${RESET}"
-    echo -e "${C_WARN}║${RESET} ${C_ACCENT}Option 3 (Client Config):${RESET} Add header to VLESS client:                      ${C_WARN}║${RESET}"
-    echo -e "${C_WARN}║${RESET}     ${GREEN}Authorization: Bearer \$(./vless-auth.sh)${RESET}                               ${C_WARN}║${RESET}"
-    echo -e "${C_WARN}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
-    echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-    echo ""
-fi
+# --- Generate VLESS URI with Firebase SNI Spoof ---
+VLESS_URI="vless://${UUID}@${CLEAN_HOST}:443?path=%2F${WS_PATH#/}&security=tls&encryption=none&insecure=1&host=${CLEAN_HOST}&fp=chrome&type=ws&allowInsecure=1&sni=firebase-settings.crashlytics.com#GCP-VLESS-PRVTSPYYY"
 
 # --- Success Banner ---
 echo -e "${C_SUCCESS}╔════════════════════════════════════════════════════════════════════════════╗${RESET}"
@@ -491,12 +413,13 @@ echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}UUID:${RESET}        ${BOLD}${UUID
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}WS Path:${RESET}     ${BOLD}${WS_PATH}${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Transport:${RESET}   ${BOLD}WebSocket (ws)${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}TLS:${RESET}         ${BOLD}Enabled (Google Managed)${RESET}"
+echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}SNI:${RESET}         ${BOLD}firebase-settings.crashlytics.com${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Region:${RESET}      ${BOLD}${REGION}${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}CPU:${RESET}         ${BOLD}${CPU}${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Memory:${RESET}      ${BOLD}${MEMORY}${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Timeout:${RESET}     ${BOLD}3600s${RESET}"
 if [ "$IAM_POLICY_FAILED" = true ]; then
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Access:${RESET}      ${BOLD}Private (authentication required)${RESET}"
+    echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Access:${RESET}      ${BOLD}Private (authentication required)${RESET}"
 else
     echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Access:${RESET}      ${BOLD}Public${RESET}"
 fi
@@ -504,11 +427,10 @@ echo -e "${C_SUCCESS}║${RESET}                                                
 echo -e "${C_SUCCESS}╠════════════════════════════════════════════════════════════════════════════╣${RESET}"
 echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_PLAIN}Import URI:${RESET}                                                         ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${VLESS_URI}  ${C_SUCCESS}║${RESET}"
+echo -e "${C_SUCCESS}║${RESET}   ${BOLD}${VLESS_URI}${RESET}  ${C_SUCCESS}║${RESET}"
 echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
 echo -e "${C_SUCCESS}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
 echo ""
 echo -e "${C_INFO}[i]${RESET} To change UUID or Path, edit config.json and redeploy."
 echo -e "${C_INFO}[i]${RESET} Deployment created by prvtspyyy"
 echo ""
-``` 
