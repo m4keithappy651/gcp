@@ -406,4 +406,4 @@ if [ "$IAM_POLICY_FAILED" = true ]; then
     echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Access:${RESET}      ${BOLD}Private (authentication required)${RESET}"
 else
     echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Access:${RESET}      ${BOLD}Public${RESET}"
-f
+fi
