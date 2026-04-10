@@ -62,28 +62,73 @@ echo -e "${C_HEADER}║${RESET}                                                 
 echo -e "${C_HEADER}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
 echo ""
 
-# --- Function: Check and Enable APIs ---
-check_enable_api() {
+# ==============================================
+#        FAILSAFE API ENABLEMENT
+# ==============================================
+REQUIRED_APIS=(
+    "run.googleapis.com"
+    "containerregistry.googleapis.com"
+    "cloudbuild.googleapis.com"
+    "compute.googleapis.com"
+    "iam.googleapis.com"
+)
+
+API_NAMES=(
+    "Cloud Run API"
+    "Container Registry API"
+    "Cloud Build API"
+    "Compute Engine API"
+    "IAM API"
+)
+
+enable_api_with_retry() {
     local API=$1
-    local DISPLAY_NAME=$2
-    echo -e "${C_INFO}[*]${RESET} Checking ${BOLD}${DISPLAY_NAME}${RESET}..."
-    if gcloud services list --enabled --filter="name:${API}" --format="value(name)" 2>/dev/null | grep -q "${API}"; then
-        echo -e "${C_SUCCESS}[✔]${RESET} ${DISPLAY_NAME} already enabled"
-    else
-        echo -e "${C_WARN}[!]${RESET} Enabling ${DISPLAY_NAME}..."
-        gcloud services enable "${API}" --quiet
-        echo -e "${C_SUCCESS}[✔]${RESET} ${DISPLAY_NAME} enabled"
-    fi
+    local NAME=$2
+    local MAX_RETRIES=3
+    local RETRY_COUNT=0
+    
+    echo -e "${C_INFO}[*]${RESET} Ensuring ${BOLD}${NAME}${RESET} is enabled..."
+    
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        # Check if already enabled
+        if gcloud services list --enabled --filter="name:${API}" --format="value(name)" 2>/dev/null | grep -q "${API}"; then
+            echo -e "${C_SUCCESS}[✔]${RESET} ${NAME} is already enabled"
+            return 0
+        fi
+        
+        # Attempt to enable
+        echo -e "${C_WARN}[!]${RESET} Enabling ${NAME} (attempt $((RETRY_COUNT+1))/${MAX_RETRIES})..."
+        if gcloud services enable "${API}" --quiet 2>/dev/null; then
+            # Wait for propagation
+            echo -e "${C_INFO}[*]${RESET} Waiting for propagation..."
+            sleep 10
+            
+            # Verify enablement
+            if gcloud services list --enabled --filter="name:${API}" --format="value(name)" 2>/dev/null | grep -q "${API}"; then
+                echo -e "${C_SUCCESS}[✔]${RESET} ${NAME} enabled and verified"
+                return 0
+            fi
+        fi
+        
+        RETRY_COUNT=$((RETRY_COUNT+1))
+    done
+    
+    echo -e "${C_ERROR}[✘]${RESET} Failed to enable ${NAME} after ${MAX_RETRIES} attempts"
+    return 1
 }
 
-# --- Function: Get online regions that support Cloud Run ---
-get_online_regions() {
-    gcloud compute regions list --format="value(name)" --filter="status=UP" 2>/dev/null | while read -r reg; do
-        if gcloud run regions list --format="value(name)" 2>/dev/null | grep -qx "$reg"; then
-            echo "$reg"
-        fi
-    done | sort
-}
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo -e "${C_PLAIN}$(math_bold "API ENABLEMENT VERIFICATION")${RESET}"
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+
+for i in "${!REQUIRED_APIS[@]}"; do
+    if ! enable_api_with_retry "${REQUIRED_APIS[$i]}" "${API_NAMES[$i]}"; then
+        echo -e "${C_ERROR}[✘]${RESET} Critical API failure. Cannot proceed."
+        exit 1
+    fi
+done
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo ""
 
 # --- Project Setup ---
 PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
@@ -123,17 +168,14 @@ fi
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
-# --- API Enablement ---
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "ENABLING REQUIRED APIS")${RESET}"
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-
-check_enable_api "run.googleapis.com" "Cloud Run API"
-check_enable_api "containerregistry.googleapis.com" "Container Registry API"
-check_enable_api "cloudbuild.googleapis.com" "Cloud Build API"
-check_enable_api "compute.googleapis.com" "Compute Engine API"
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo ""
+# --- Function: Get online regions that support Cloud Run ---
+get_online_regions() {
+    gcloud compute regions list --format="value(name)" --filter="status=UP" 2>/dev/null | while read -r reg; do
+        if gcloud run regions list --format="value(name)" 2>/dev/null | grep -qx "$reg"; then
+            echo "$reg"
+        fi
+    done | sort
+}
 
 # --- Region Selection (online only) ---
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
@@ -240,7 +282,7 @@ DEPLOY_PUBLIC_SUCCESS=false
 IAM_POLICY_FAILED=false
 DEPLOY_LOG="/tmp/deploy_output.log"
 
-# Attempt 1: Public deployment (output to log file, no variable capture)
+# Attempt 1: Public deployment
 echo -e "${C_INFO}[*]${RESET} Attempting public deployment..."
 gcloud run deploy vless-ws \
     --image "$IMAGE" \
@@ -254,7 +296,6 @@ gcloud run deploy vless-ws \
     --quiet > "$DEPLOY_LOG" 2>&1
 DEPLOY_EXIT=$?
 
-# Display captured output
 if [ -s "$DEPLOY_LOG" ]; then
     cat "$DEPLOY_LOG"
 fi
@@ -274,10 +315,10 @@ else
     fi
 fi
 
-# Attempt 2: Private deployment (if public failed due to IAM policy)
+# Attempt 2: Private deployment
 if [ "$IAM_POLICY_FAILED" = true ]; then
     echo ""
-    echo -e "${C_INFO}[*]${RESET} Redeploying as private service (authentication required)..."
+    echo -e "${C_INFO}[*]${RESET} Redeploying as private service..."
     gcloud run deploy vless-ws \
         --image "$IMAGE" \
         --platform managed \
@@ -312,7 +353,7 @@ SERVICE_URL=$(gcloud run services describe vless-ws --region "$REGION" --format=
 CLEAN_HOST=$(echo "$SERVICE_URL" | sed 's|https://||')
 VLESS_URI="vless://${UUID}@${CLEAN_HOST}:443?encryption=none&security=tls&type=ws&path=${WS_PATH}#GCP-VLESS-PRVTSPYYY"
 
-# --- Post-Deployment: Service Account Setup (if private deployment was used) ---
+# --- Post-Deployment: Service Account Setup (if private deployment) ---
 if [ "$IAM_POLICY_FAILED" = true ]; then
     echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
     echo -e "${C_PLAIN}$(math_bold "CONFIGURING SERVICE AUTHENTICATION")${RESET}"
@@ -402,30 +443,3 @@ echo -e "${C_SUCCESS}║${RESET}                                                
 echo -e "${C_SUCCESS}╠════════════════════════════════════════════════════════════════════════════╣${RESET}"
 echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Address:${RESET}     ${BOLD}${CLEAN_HOST}${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Port:${RESET}        ${BOLD}443${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}UUID:${RESET}        ${BOLD}${UUID}${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}WS Path:${RESET}     ${BOLD}${WS_PATH}${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Transport:${RESET}   ${BOLD}WebSocket (ws)${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}TLS:${RESET}         ${BOLD}Enabled (Google Managed)${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Region:${RESET}      ${BOLD}${REGION}${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}CPU:${RESET}         ${BOLD}${CPU}${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Memory:${RESET}      ${BOLD}${MEMORY}${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Timeout:${RESET}     ${BOLD}3600s${RESET}"
-if [ "$IAM_POLICY_FAILED" = true ]; then
-    echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Access:${RESET}      ${BOLD}Private (authentication required)${RESET}"
-
-else
-    echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Access:${RESET}      ${BOLD}Public${RESET}"
-fi
-echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}╠════════════════════════════════════════════════════════════════════════════╣${RESET}"
-echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_PLAIN}Import URI:${RESET}                                                         ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${VLESS_URI}  ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
-echo ""
-echo -e "${C_INFO}[i]${RESET} To change UUID or Path, edit config.json and redeploy."
-echo -e "${C_INFO}[i]${RESET} Deployment created by prvtspyyy"
-echo ""
-```
