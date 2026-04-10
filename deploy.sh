@@ -63,7 +63,7 @@ echo -e "${C_HEADER}╚═══════════════════
 echo ""
 
 # ==============================================
-#        FAILSAFE API ENABLEMENT
+#        FAILSAFE API VERIFICATION LOOP
 # ==============================================
 REQUIRED_APIS=(
     "run.googleapis.com"
@@ -81,51 +81,27 @@ API_NAMES=(
     "IAM API"
 )
 
-enable_api_with_retry() {
-    local API=$1
-    local NAME=$2
-    local MAX_RETRIES=3
-    local RETRY_COUNT=0
-    
-    echo -e "${C_INFO}[*]${RESET} Ensuring ${BOLD}${NAME}${RESET} is enabled..."
-    
-    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-        # Check if already enabled
-        if gcloud services list --enabled --filter="name:${API}" --format="value(name)" 2>/dev/null | grep -q "${API}"; then
-            echo -e "${C_SUCCESS}[✔]${RESET} ${NAME} is already enabled"
-            return 0
-        fi
-        
-        # Attempt to enable
-        echo -e "${C_WARN}[!]${RESET} Enabling ${NAME} (attempt $((RETRY_COUNT+1))/${MAX_RETRIES})..."
-        if gcloud services enable "${API}" --quiet 2>/dev/null; then
-            # Wait for propagation
-            echo -e "${C_INFO}[*]${RESET} Waiting for propagation..."
-            sleep 10
-            
-            # Verify enablement
-            if gcloud services list --enabled --filter="name:${API}" --format="value(name)" 2>/dev/null | grep -q "${API}"; then
-                echo -e "${C_SUCCESS}[✔]${RESET} ${NAME} enabled and verified"
-                return 0
-            fi
-        fi
-        
-        RETRY_COUNT=$((RETRY_COUNT+1))
-    done
-    
-    echo -e "${C_ERROR}[✘]${RESET} Failed to enable ${NAME} after ${MAX_RETRIES} attempts"
-    return 1
-}
-
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "API ENABLEMENT VERIFICATION")${RESET}"
+echo -e "${C_PLAIN}$(math_bold "API VERIFICATION LOOP")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
 for i in "${!REQUIRED_APIS[@]}"; do
-    if ! enable_api_with_retry "${REQUIRED_APIS[$i]}" "${API_NAMES[$i]}"; then
-        echo -e "${C_ERROR}[✘]${RESET} Critical API failure. Cannot proceed."
-        exit 1
-    fi
+    API="${REQUIRED_APIS[$i]}"
+    NAME="${API_NAMES[$i]}"
+    
+    echo -e "${C_INFO}[*]${RESET} Waiting for ${BOLD}${NAME}${RESET} to be active..."
+    gcloud services enable "${API}" --quiet 2>/dev/null &
+    
+    while true; do
+        if gcloud services list --enabled --filter="name:${API}" --format="value(name)" 2>/dev/null | grep -q "${API}"; then
+            echo -e "${C_SUCCESS}[✔]${RESET} ${NAME} is active"
+            break
+        else
+            echo -e "${C_WARN}[!]${RESET} ${NAME} not yet active. Retrying enablement..."
+            gcloud services enable "${API}" --quiet 2>/dev/null
+            sleep 5
+        fi
+    done
 done
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
@@ -453,19 +429,4 @@ echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}CPU:${RESET}         ${BOLD}${CPU}
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Memory:${RESET}      ${BOLD}${MEMORY}${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Timeout:${RESET}     ${BOLD}3600s${RESET}"
 if [ "$IAM_POLICY_FAILED" = true ]; then
-    echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Access:${RESET}      ${BOLD}Private (authentication required)${RESET}"
-else
-    echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Access:${RESET}      ${BOLD}Public${RESET}"
-fi
-echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}╠════════════════════════════════════════════════════════════════════════════╣${RESET}"
-echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_PLAIN}Import URI:${RESET}                                                         ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${VLESS_URI}  ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
-echo ""
-echo -e "${C_INFO}[i]${RESET} To change UUID or Path, edit config.json and redeploy."
-echo -e "${C_INFO}[i]${RESET} Deployment created by prvtspyyy"
-echo ""
-```
+   
