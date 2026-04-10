@@ -1,10 +1,5 @@
 FROM teddysun/xray:latest
-
-# Copy the configuration file
 COPY config.json /etc/xray/config.json
-
-# Expose the required port
-EXPOSE 8080
-
-# Start Xray directly
+ENTRYPOINT []
 CMD ["/usr/bin/xray", "run", "-c", "/etc/xray/config.json"]
+EXPOSE 8080
