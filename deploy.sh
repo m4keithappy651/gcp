@@ -144,35 +144,68 @@ fi
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
-# --- Function: Get online regions that support Cloud Run ---
-get_online_regions() {
-    gcloud compute regions list --format="value(name)" --filter="status=UP" 2>/dev/null | while read -r reg; do
-        if gcloud run regions list --format="value(name)" 2>/dev/null | grep -qx "$reg"; then
-            echo "$reg"
-        fi
-    done | sort
-}
+# ==============================================
+#        GUARANTEED REGION SELECTION
+# ==============================================
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo -e "${C_PLAIN}$(math_bold "REGION SELECTION")${RESET}"
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
-# Pre-verified working regions
-PRIMARY_REGIONS=("us-central1" "us-east1" "us-west1" "europe-west1" "asia-east1")
-echo -e "${C_INFO}[*]${RESET} Detecting available regions..."
-CLOUD_RUN_REGIONS=$(gcloud run regions list --format="value(name)" 2>/dev/null)
+# Hardcoded working regions (always available in all GCP accounts)
+WORKING_REGIONS=(
+    "us-central1"
+    "us-east1"
+    "us-west1"
+    "europe-west1"
+    "asia-east1"
+    "asia-southeast1"
+    "europe-west4"
+    "northamerica-northeast1"
+)
+
+# Try to fetch regions from API (non-blocking, quick)
+echo -e "${C_INFO}[*]${RESET} Checking available regions..."
+FETCHED_REGIONS=$(gcloud run regions list --format="value(name)" 2>/dev/null | head -10)
+
 AVAILABLE_REGIONS=()
-for reg in "${PRIMARY_REGIONS[@]}"; do
-    if echo "$CLOUD_RUN_REGIONS" | grep -qx "$reg"; then
+if [ -n "$FETCHED_REGIONS" ]; then
+    echo -e "${C_SUCCESS}[✔]${RESET} Found regions via API"
+    # Use fetched regions, but limit to first 8
+    for reg in $FETCHED_REGIONS; do
         AVAILABLE_REGIONS+=("$reg")
-    fi
-done
-    echo ""
-    read -p "$(echo -e "${C_INFO}[?]${RESET} Select region [1-${#ONLINE_REGIONS[@]}]: ")" REGION_CHOICE
-    if [[ "$REGION_CHOICE" =~ ^[0-9]+$ ]] && [ "$REGION_CHOICE" -ge 1 ] && [ "$REGION_CHOICE" -le ${#ONLINE_REGIONS[@]} ]; then
-        REGION="${ONLINE_REGIONS[$((REGION_CHOICE-1))]}"
-    else
-        echo -e "${C_WARN}[!]${RESET} Invalid selection. Using us-central1"
-        REGION="us-central1"
-    fi
+        if [ ${#AVAILABLE_REGIONS[@]} -ge 8 ]; then
+            break
+        fi
+    done
 fi
-echo -e "${C_SUCCESS}[✔]${RESET} Selected region: ${BOLD}${REGION}${RESET}"
+
+# If API fetch failed or returned nothing, use hardcoded list
+if [ ${#AVAILABLE_REGIONS[@]} -eq 0 ]; then
+    echo -e "${C_WARN}[!]${RESET} Using default region list"
+    AVAILABLE_REGIONS=("${WORKING_REGIONS[@]}")
+fi
+
+# Display regions
+echo ""
+echo -e "${C_SUCCESS}[✔]${RESET} Available deployment regions:"
+echo ""
+for i in "${!AVAILABLE_REGIONS[@]}"; do
+    idx=$((i+1))
+    echo -e "  ${C_ACCENT}[${idx}]${RESET} ${BOLD}${AVAILABLE_REGIONS[$i]}${RESET}"
+done
+echo ""
+
+# Selection
+read -p "$(echo -e "${C_INFO}[?]${RESET} Select region [1-${#AVAILABLE_REGIONS[@]}]: ")" REGION_CHOICE
+
+if [[ "$REGION_CHOICE" =~ ^[0-9]+$ ]] && [ "$REGION_CHOICE" -ge 1 ] && [ "$REGION_CHOICE" -le ${#AVAILABLE_REGIONS[@]} ]; then
+    REGION="${AVAILABLE_REGIONS[$((REGION_CHOICE-1))]}"
+    echo -e "${C_SUCCESS}[✔]${RESET} Selected region: ${BOLD}${REGION}${RESET}"
+else
+    REGION="${AVAILABLE_REGIONS[0]}"
+    echo -e "${C_WARN}[!]${RESET} Invalid choice. Defaulting to: ${BOLD}${REGION}${RESET}"
+fi
+
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
