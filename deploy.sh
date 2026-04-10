@@ -154,7 +154,7 @@ echo -e "${C_HEADER}════════════════════
 echo ""
 
 # ==============================================
-#        CUSTOMIZABLE SERVICE DEPLOYMENT
+#        CUSTOMIZABLE SERVICE NAME ONLY
 # ==============================================
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo -e "${C_PLAIN}$(math_bold "SERVICE CONFIGURATION")${RESET}"
@@ -170,45 +170,14 @@ if [ -z "$SERVICE_NAME" ]; then
 fi
 echo -e "${C_SUCCESS}[✔]${RESET} Service name: ${BOLD}${SERVICE_NAME}${RESET}"
 
-# --- Customizable WebSocket Path ---
-DEFAULT_WS_PATH="/prvtspyyy404"
-read -p "$(echo -e "${C_INFO}[?]${RESET} Enter WebSocket path [default: ${DEFAULT_WS_PATH}]: ")" WS_PATH_INPUT
-WS_PATH="${WS_PATH_INPUT:-$DEFAULT_WS_PATH}"
-if [[ "$WS_PATH" != /* ]]; then
-    WS_PATH="/$WS_PATH"
-fi
-echo -e "${C_SUCCESS}[✔]${RESET} WebSocket path: ${BOLD}${WS_PATH}${RESET}"
+# --- Fixed Values ---
+WS_PATH="/prvtspyyy404"
+UUID="a3b7de87-b46f-4dcf-b6ed-5bf5ebe83167"
 
-# --- Customizable UUID ---
-DEFAULT_UUID="a3b7de87-b46f-4dcf-b6ed-5bf5ebe83167"
-read -p "$(echo -e "${C_INFO}[?]${RESET} Enter UUID [default: ${DEFAULT_UUID}]: ")" UUID_INPUT
-UUID="${UUID_INPUT:-$DEFAULT_UUID}"
-echo -e "${C_SUCCESS}[✔]${RESET} UUID: ${BOLD}${UUID}${RESET}"
-
+echo -e "${C_SUCCESS}[✔]${RESET} WebSocket path: ${BOLD}${WS_PATH}${RESET} (fixed)"
+echo -e "${C_SUCCESS}[✔]${RESET} UUID: ${BOLD}${UUID}${RESET} (fixed)"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
-
-# --- Update config.json with custom values ---
-cat > config.json <<EOF
-{
-  "log": {"loglevel": "warning"},
-  "inbounds": [{
-    "listen": "0.0.0.0",
-    "port": 8080,
-    "protocol": "vless",
-    "settings": {
-      "clients": [{"id": "$UUID"}],
-      "decryption": "none"
-    },
-    "streamSettings": {
-      "network": "ws",
-      "security": "tls",
-      "wsSettings": {"path": "$WS_PATH"}
-    }
-  }],
-  "outbounds": [{"protocol": "freedom", "tag": "direct"}]
-}
-EOF
 
 # --- Build and Deploy ---
 IMAGE="gcr.io/$PROJECT_ID/$SERVICE_NAME:latest"
@@ -265,5 +234,3 @@ echo -e "${C_SUCCESS}║${RESET}   ${BOLD}${VLESS_URI}${RESET}  ${C_SUCCESS}║$
 echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
 echo -e "${C_SUCCESS}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
 echo ""
-                                                                            ${C_SUCCESS}║${RESET}"
-                                                                            
