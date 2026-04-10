@@ -260,7 +260,7 @@ DEPLOY_LOG="/tmp/deploy_output.log"
 
 # Attempt 1: Public deployment
 echo -e "${C_INFO}[*]${RESET} Attempting public deployment..."
-gcloud run deploy vless-ws \
+gcloud run deploy "${SERVICE_NAME}" \
     --image "$IMAGE" \
     --platform managed \
     --region "$REGION" \
