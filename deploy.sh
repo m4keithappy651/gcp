@@ -54,11 +54,11 @@ math_bold() {
 clear
 echo ""
 echo -e "${C_HEADER}╔════════════════════════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${C_HEADER}║${RESET}                                                                            ${C_HEADER}║${RESET}"
-echo -e "${C_HEADER}║${RESET}   ${BOLD}${WHITE}$(math_bold "PRVTSPYYY404")${RESET}                                            ${C_HEADER}║${RESET}"
-echo -e "${C_HEADER}║${RESET}   ${C_PLAIN}GOOGLE CLOUD PLATFORM VLESS AUTO DEPLOYER${RESET}                         ${C_HEADER}║${RESET}"
-echo -e "${C_HEADER}║${RESET}   ${C_ACCENT}created by prvtspyyy${RESET}                                              ${C_HEADER}║${RESET}"
-echo -e "${C_HEADER}║${RESET}                                                                            ${C_HEADER}║${RESET}"
+echo -e "${C_HEADER}║${RESET}                                                                       ${C_HEADER}║${RESET}"
+echo -e "${C_HEADER}║${RESET}   ${BOLD}${WHITE}$(math_bold "PRVTSPYYY404")${RESET}                  ${C_HEADER}║${RESET}"
+echo -e "${C_HEADER}║${RESET}   ${C_PLAIN}GOOGLE CLOUD PLATFORM VLESS AUTO DEPLOYER${RESET}         ${C_HEADER}║${RESET}"
+echo -e "${C_HEADER}║${RESET}   ${C_ACCENT}created by prvtspyyy${RESET}                             ${C_HEADER}║${RESET}"
+echo -e "${C_HEADER}║${RESET}                                                                       ${C_HEADER}║${RESET}"
 echo -e "${C_HEADER}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
 echo ""
 
