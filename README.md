@@ -224,3 +224,7 @@ MIT License – do whatever you want with this code. Modify it, share it, improv
 Deploy fast. Stay secure.
 
 ```
+FB > https://www.facebook.com/saekacutiee
+TG > t.me/prvtspy
+
+> THANK YOU TO ALL THE VOLUNTEERS THAT HELPED ME TO MAKE THIS PROJECT POSSIBLE <
