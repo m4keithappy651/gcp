@@ -1,6 +1,6 @@
 FROM teddysun/xray:latest
 
-# Install Python for health check server (Alpine uses apk)
+# Install Python for health check server
 RUN apk update && apk add --no-cache python3 && rm -rf /var/cache/apk/*
 
 # Copy configuration
