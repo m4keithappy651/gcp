@@ -50,17 +50,60 @@ math_bold() {
         -e 's/9/𝟵/g'
 }
 
-# --- Clear screen and display main banner ---
-clear
-echo ""
-echo -e "${C_HEADER}╔════════════════════════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${C_HEADER}║${RESET}                                                                       ${C_HEADER}║${RESET}"
-echo -e "${C_HEADER}║${RESET}   ${BOLD}${WHITE}$(math_bold "PRVTSPYYY404")${RESET}                  ${C_HEADER}║${RESET}"
-echo -e "${C_HEADER}║${RESET}   ${C_PLAIN}GOOGLE CLOUD PLATFORM VLESS AUTO DEPLOYER${RESET}         ${C_HEADER}║${RESET}"
-echo -e "${C_HEADER}║${RESET}   ${C_ACCENT}created by prvtspyyy${RESET}                             ${C_HEADER}║${RESET}"
-echo -e "${C_HEADER}║${RESET}                                                                       ${C_HEADER}║${RESET}"
-echo -e "${C_HEADER}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
-echo ""
+# --- Rainbow Banner Function (Auto-Fit for Cloud Shell) ---
+rainbow_banner() {
+    local text="PRVTSPY404"
+    local colors=(
+        "${LRED}"
+        "${LYELLOW}"
+        "${LGREEN}"
+        "${LCYAN}"
+        "${LBLUE}"
+        "${LMAGENTA}"
+    )
+    
+    clear
+    echo ""
+    echo -e "${BOLD}${LRED}╔══════════════════════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${BOLD}${LRED}║${RESET}                                                                                ${BOLD}${LRED}║${RESET}"
+    
+    # Line 1 - Top of letters
+    echo -ne "${BOLD}${LRED}║${RESET}     "
+    echo -ne "${LRED}██████╗ ${LYELLOW}██████╗ ${LGREEN}██╗   ██╗${LCYAN}████████╗${LBLUE}███████╗${LMAGENTA}██████╗ ${LRED}██╗   ██╗${RESET}"
+    echo -e "     ${BOLD}${LRED}║${RESET}"
+    
+    # Line 2
+    echo -ne "${BOLD}${LRED}║${RESET}     "
+    echo -ne "${LRED}██╔══██╗${LYELLOW}██╔══██╗${LGREEN}██║   ██║${LCYAN}╚══██╔══╝${LBLUE}██╔════╝${LMAGENTA}╚════██╗${LRED}╚██╗ ██╔╝${RESET}"
+    echo -e "     ${BOLD}${LRED}║${RESET}"
+    
+    # Line 3
+    echo -ne "${BOLD}${LRED}║${RESET}     "
+    echo -ne "${LRED}██████╔╝${LYELLOW}██████╔╝${LGREEN}██║   ██║${LCYAN}   ██║   ${LBLUE}███████╗${LMAGENTA} █████╔╝ ${LRED} ╚████╔╝ ${RESET}"
+    echo -e "     ${BOLD}${LRED}║${RESET}"
+    
+    # Line 4
+    echo -ne "${BOLD}${LRED}║${RESET}     "
+    echo -ne "${LRED}██╔═══╝ ${LYELLOW}██╔══██╗${LGREEN}╚██╗ ██╔╝${LCYAN}   ██║   ${LBLUE}╚════██║${LMAGENTA} ╚═══██╗${LRED}   ╚██╔╝  ${RESET}"
+    echo -e "     ${BOLD}${LRED}║${RESET}"
+    
+    # Line 5
+    echo -ne "${BOLD}${LRED}║${RESET}     "
+    echo -ne "${LRED}██║     ${LYELLOW}██║  ██║${LGREEN} ╚████╔╝ ${LCYAN}   ██║   ${LBLUE}███████║${LMAGENTA}██████╔╝${LRED}   ██║   ${RESET}"
+    echo -e "     ${BOLD}${LRED}║${RESET}"
+    
+    # Line 6
+    echo -ne "${BOLD}${LRED}║${RESET}     "
+    echo -ne "${LRED}╚═╝     ${LYELLOW}╚═╝  ╚═╝${LGREEN}  ╚═══╝  ${LCYAN}   ╚═╝   ${LBLUE}╚══════╝${LMAGENTA}╚═════╝ ${LRED}   ╚═╝   ${RESET}"
+    echo -e "     ${BOLD}${LRED}║${RESET}"
+    
+    echo -e "${BOLD}${LRED}║${RESET}                                                                                ${BOLD}${LRED}║${RESET}"
+    echo -e "${BOLD}${LRED}║${RESET}                    ${BOLD}${WHITE}GOOGLE CLOUD PLATFORM VLESS DEPLOYER${RESET}                    ${BOLD}${LRED}║${RESET}"
+    echo -e "${BOLD}${LRED}║${RESET}                              ${CYAN}created by prvtspyyy${RESET}                             ${BOLD}${LRED}║${RESET}"
+    echo -e "${BOLD}${LRED}║${RESET}                                                                                ${BOLD}${LRED}║${RESET}"
+    echo -e "${BOLD}${LRED}╚══════════════════════════════════════════════════════════════════════════════╝${RESET}"
+    echo ""
+}
 
 # ==============================================
 #        FAILSAFE API VERIFICATION LOOP
