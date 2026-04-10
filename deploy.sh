@@ -153,63 +153,117 @@ echo -e "${C_SUCCESS}[✔]${RESET} CPU: ${BOLD}${CPU}${RESET}, Memory: ${BOLD}${
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
-# --- Service Name ---
-SERVICE_NAME="vless-reality"
+# ==============================================
+#        CUSTOMIZABLE SERVICE DEPLOYMENT
+# ==============================================
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo -e "${C_PLAIN}$(math_bold "SERVICE CONFIGURATION")${RESET}"
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+
+# --- Customizable Service Name ---
+DEFAULT_SERVICE_NAME="prvtspyyy404"
+read -p "$(echo -e "${C_INFO}[?]${RESET} Enter service name [default: ${DEFAULT_SERVICE_NAME}]: ")" SERVICE_NAME_INPUT
+SERVICE_NAME="${SERVICE_NAME_INPUT:-$DEFAULT_SERVICE_NAME}"
+SERVICE_NAME=$(echo "$SERVICE_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
+if [ -z "$SERVICE_NAME" ]; then
+    SERVICE_NAME="$DEFAULT_SERVICE_NAME"
+fi
 echo -e "${C_SUCCESS}[✔]${RESET} Service name: ${BOLD}${SERVICE_NAME}${RESET}"
+
+# --- Customizable WebSocket Path ---
+DEFAULT_WS_PATH="/prvtspyyy404"
+read -p "$(echo -e "${C_INFO}[?]${RESET} Enter WebSocket path [default: ${DEFAULT_WS_PATH}]: ")" WS_PATH_INPUT
+WS_PATH="${WS_PATH_INPUT:-$DEFAULT_WS_PATH}"
+if [[ "$WS_PATH" != /* ]]; then
+    WS_PATH="/$WS_PATH"
+fi
+echo -e "${C_SUCCESS}[✔]${RESET} WebSocket path: ${BOLD}${WS_PATH}${RESET}"
+
+# --- Customizable UUID ---
+DEFAULT_UUID="a3b7de87-b46f-4dcf-b6ed-5bf5ebe83167"
+read -p "$(echo -e "${C_INFO}[?]${RESET} Enter UUID [default: ${DEFAULT_UUID}]: ")" UUID_INPUT
+UUID="${UUID_INPUT:-$DEFAULT_UUID}"
+echo -e "${C_SUCCESS}[✔]${RESET} UUID: ${BOLD}${UUID}${RESET}"
+
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
-# --- Build Parameters ---
-UUID=$(grep -o '"id": "[^"]*' config.json | cut -d'"' -f4)
-IMAGE="gcr.io/$PROJECT_ID/vless-reality:latest"
+# --- Update config.json with custom values ---
+cat > config.json <<EOF
+{
+  "log": {"loglevel": "warning"},
+  "inbounds": [{
+    "listen": "0.0.0.0",
+    "port": 8080,
+    "protocol": "vless",
+    "settings": {
+      "clients": [{"id": "$UUID"}],
+      "decryption": "none"
+    },
+    "streamSettings": {
+      "network": "ws",
+      "security": "tls",
+      "wsSettings": {"path": "$WS_PATH"}
+    }
+  }],
+  "outbounds": [{"protocol": "freedom", "tag": "direct"}]
+}
+EOF
+
+# --- Build and Deploy ---
+IMAGE="gcr.io/$PROJECT_ID/$SERVICE_NAME:latest"
 
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo -e "${C_PLAIN}$(math_bold "BUILDING AND DEPLOYING")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
-# Build
-echo -e "${C_INFO}[*]${RESET} Building Docker image..."
-docker build -t "$IMAGE" . --quiet
+echo -e "${C_INFO}[*]${RESET} Building container image..."
+gcloud builds submit --tag "$IMAGE" . --quiet
 echo -e "${C_SUCCESS}[✔]${RESET} Build complete"
 
-# Push
-echo -e "${C_INFO}[*]${RESET} Pushing to Container Registry..."
-docker push "$IMAGE" --quiet
-echo -e "${C_SUCCESS}[✔]${RESET} Push complete"
-
-# Deploy with HTTP/2 for gRPC
 echo -e "${C_INFO}[*]${RESET} Deploying to Cloud Run..."
-gcloud run deploy vless-ws \
-    --image gcr.io/$PROJECT_ID/vless-ws \
+gcloud run deploy "$SERVICE_NAME" \
+    --image "$IMAGE" \
     --platform managed \
-    --region us-central1 \
+    --region "$REGION" \
     --allow-unauthenticated \
     --port 8080 \
-    --cpu 1 \
-    --memory 1Gi \
+    --cpu "$CPU" \
+    --memory "$MEMORY" \
     --timeout 3600 \
     --quiet
-    
-SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)' 2>/dev/null)
-CLEAN_HOST=$(echo "$SERVICE_URL" | sed 's|https://||')
 
-# --- Output ---
+SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)' 2>/dev/null | sed 's|https://||')
+
+# --- Automatic VLESS URI Generation ---
+VLESS_URI="vless://${UUID}@${SERVICE_URL}:443?encryption=none&security=tls&type=ws&path=%2F${WS_PATH#/}#${SERVICE_NAME}"
+
 echo ""
 echo -e "${C_SUCCESS}╔════════════════════════════════════════════════════════════════════════════╗${RESET}"
 echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${BOLD}${WHITE}$(math_bold "DEPLOYMENT SUCCESSFUL")${RESET}                                          ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}created by prvtspyyy${RESET}                                              ${C_SUCCESS}║${RESET}"
+echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}created by prvtspyyy404${RESET}                                           ${C_SUCCESS}║${RESET}"
 echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
 echo -e "${C_SUCCESS}╠════════════════════════════════════════════════════════════════════════════╣${RESET}"
 echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Protocol:${RESET}    ${BOLD}VLESS + Reality + gRPC${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Address:${RESET}     ${BOLD}${CLEAN_HOST}${RESET}"
+echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Service:${RESET}     ${BOLD}${SERVICE_NAME}${RESET}"
+echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Address:${RESET}     ${BOLD}${SERVICE_URL}${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Port:${RESET}        ${BOLD}443${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}UUID:${RESET}        ${BOLD}${UUID}${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}ServiceName:${RESET}  ${BOLD}grpc${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}SNI:${RESET}         ${BOLD}www.microsoft.com${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}PublicKey:${RESET}   ${BOLD}OOKegkTMuYxL0oi6G_4nVzFdzor8XTcQ7sE4oZ9cVFU${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}ShortId:${RESET}     ${BOLD}6ba85179e30d4fc2${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}SpiderX:${RESET}     ${BOLD}/grpc${RESET}"
+echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}WS Path:${RESET}     ${BOLD}${WS_PATH}${RESET}"
+echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Transport:${RESET}   ${BOLD}WebSocket (ws)${RESET}"
+echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Security:${RESET}    ${BOLD}TLS (Google Managed)${RESET}"
+echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Region:${RESET}      ${BOLD}${REGION}${RESET}"
+echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}CPU:${RESET}         ${BOLD}${CPU}${RESET}"
+echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Memory:${RESET}      ${BOLD}${MEMORY}${RESET}"
+echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Timeout:${RESET}     ${BOLD}3600s${RESET}"
+echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
+echo -e "${C_SUCCESS}╠════════════════════════════════════════════════════════════════════════════╣${RESET}"
+echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
+echo -e "${C_SUCCESS}║${RESET}   ${C_PLAIN}Import URI:${RESET}                                                         ${C_SUCCESS}║${RESET}"
+echo -e "${C_SUCCESS}║${RESET}   ${BOLD}${VLESS_URI}${RESET}  ${C_SUCCESS}║${RESET}"
 echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
 echo -e "${C_SUCCESS}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
 echo ""
+                                                                            ${C_SUCCESS}║${RESET}"
+                                                                            
