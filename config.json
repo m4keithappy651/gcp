@@ -1,29 +1,37 @@
 {
-  "log": {"loglevel": "warning"},
-  "inbounds": [{
-    "listen": "0.0.0.0",
-    "port": 8080,
-    "protocol": "vless",
-    "settings": {
-      "clients": [{"id": "a3b7de87-b46f-4dcf-b6ed-5bf5ebe83167", "flow": "xtls-rprx-vision"}],
-      "decryption": "none"
-    },
-    "streamSettings": {
-      "network": "tcp",
-      "security": "reality",
-      "realitySettings": {
-        "show": false,
-        "dest": "support.maya.ph:443",
-        "xver": 0,
-        "serverNames": ["support.maya.ph"],
-        "privateKey": "OOKegkTMuYxL0oi6G_4nVzFdzor8XTcQ7sE4oZ9cVFU",
-        "shortIds": ["6ba85179e30d4fc2"],
-        "spiderX": "/"
+  "log": {
+    "loglevel": "warning"
+  },
+  "inbounds": [
+    {
+      "listen": "0.0.0.0",
+      "port": 8080,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "a3b7de87-b46f-4dcf-b6ed-5bf5ebe83167"
+          }
+        ],
+        "decryption": "none"
       },
-      "tcpSettings": {
-        "header": {"type": "none"}
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "wsSettings": {
+          "path": "/prvtspyyy404"
+        }
       }
     }
-  }],
-  "outbounds": [{"protocol": "freedom", "tag": "direct"}]
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "tag": "direct"
+    },
+    {
+      "protocol": "blackhole",
+      "tag": "block"
+    }
+  ]
 }
