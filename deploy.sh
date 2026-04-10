@@ -145,14 +145,14 @@ echo -e "${C_HEADER}════════════════════
 echo ""
 
 # ==============================================
-#        GUARANTEED REGION SELECTION
+#        REAL-TIME REGION DETECTION WITH STATUS
 # ==============================================
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "REGION SELECTION")${RESET}"
+echo -e "${C_PLAIN}$(math_bold "REGION SELECTION - REAL TIME STATUS")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
-# Hardcoded working regions (always available in all GCP accounts)
-WORKING_REGIONS=(
+# Primary regions to test
+TEST_REGIONS=(
     "us-central1"
     "us-east1"
     "us-west1"
@@ -161,51 +161,63 @@ WORKING_REGIONS=(
     "asia-southeast1"
     "europe-west4"
     "northamerica-northeast1"
+    "southamerica-east1"
+    "australia-southeast1"
 )
 
-# Try to fetch regions from API (non-blocking, quick)
-echo -e "${C_INFO}[*]${RESET} Checking available regions..."
-FETCHED_REGIONS=$(gcloud run regions list --format="value(name)" 2>/dev/null | head -10)
+echo -e "${C_INFO}[*]${RESET} Testing region availability in real-time..."
+echo ""
 
 AVAILABLE_REGIONS=()
-if [ -n "$FETCHED_REGIONS" ]; then
-    echo -e "${C_SUCCESS}[✔]${RESET} Found regions via API"
-    # Use fetched regions, but limit to first 8
-    for reg in $FETCHED_REGIONS; do
+
+for reg in "${TEST_REGIONS[@]}"; do
+    # Test if region is online and accessible
+    if gcloud run services list --region="$reg" --limit=1 &>/dev/null; then
         AVAILABLE_REGIONS+=("$reg")
-        if [ ${#AVAILABLE_REGIONS[@]} -ge 8 ]; then
-            break
-        fi
-    done
-fi
-
-# If API fetch failed or returned nothing, use hardcoded list
-if [ ${#AVAILABLE_REGIONS[@]} -eq 0 ]; then
-    echo -e "${C_WARN}[!]${RESET} Using default region list"
-    AVAILABLE_REGIONS=("${WORKING_REGIONS[@]}")
-fi
-
-# Display regions
-echo ""
-echo -e "${C_SUCCESS}[✔]${RESET} Available deployment regions:"
-echo ""
-for i in "${!AVAILABLE_REGIONS[@]}"; do
-    idx=$((i+1))
-    echo -e "  ${C_ACCENT}[${idx}]${RESET} ${BOLD}${AVAILABLE_REGIONS[$i]}${RESET}"
+        echo -e "  ${C_ACCENT}[✓]${RESET} ${BOLD}${reg}${RESET} ${GREEN}◉ ONLINE${RESET}"
+    else
+        echo -e "  ${RED}[✗]${RESET} ${BOLD}${reg}${RESET} ${RED}◉ UNAVAILABLE${RESET}"
+    fi
 done
+
 echo ""
 
-# Selection
-read -p "$(echo -e "${C_INFO}[?]${RESET} Select region [1-${#AVAILABLE_REGIONS[@]}]: ")" REGION_CHOICE
-
-if [[ "$REGION_CHOICE" =~ ^[0-9]+$ ]] && [ "$REGION_CHOICE" -ge 1 ] && [ "$REGION_CHOICE" -le ${#AVAILABLE_REGIONS[@]} ]; then
-    REGION="${AVAILABLE_REGIONS[$((REGION_CHOICE-1))]}"
-    echo -e "${C_SUCCESS}[✔]${RESET} Selected region: ${BOLD}${REGION}${RESET}"
-else
-    REGION="${AVAILABLE_REGIONS[0]}"
-    echo -e "${C_WARN}[!]${RESET} Invalid choice. Defaulting to: ${BOLD}${REGION}${RESET}"
+# Check if any regions are available
+if [ ${#AVAILABLE_REGIONS[@]} -eq 0 ]; then
+    echo -e "${C_ERROR}[✘]${RESET} No regions are currently accessible!"
+    echo -e "${C_WARN}[!]${RESET} This may be due to organization policy restrictions."
+    echo -e "${C_INFO}[*]${RESET} Forcing fallback to us-central1..."
+    AVAILABLE_REGIONS=("us-central1")
 fi
 
+# Display available regions for selection
+echo -e "${C_SUCCESS}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo -e "${C_PLAIN}AVAILABLE REGIONS (ONLY ONLINE REGIONS SHOWN)${RESET}"
+echo -e "${C_SUCCESS}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo ""
+
+if [ ${#AVAILABLE_REGIONS[@]} -eq 1 ]; then
+    echo -e "${C_SUCCESS}[✔]${RESET} Only one region available. Auto-selecting..."
+    REGION="${AVAILABLE_REGIONS[0]}"
+    echo -e "  ${C_ACCENT}[1]${RESET} ${BOLD}${REGION}${RESET} ${GREEN}◉ SELECTED${RESET}"
+else
+    for i in "${!AVAILABLE_REGIONS[@]}"; do
+        idx=$((i+1))
+        echo -e "  ${C_ACCENT}[${idx}]${RESET} ${BOLD}${AVAILABLE_REGIONS[$i]}${RESET} ${GREEN}◉ ONLINE${RESET}"
+    done
+    echo ""
+    read -p "$(echo -e "${C_INFO}[?]${RESET} Select region [1-${#AVAILABLE_REGIONS[@]}]: ")" REGION_CHOICE
+    
+    if [[ "$REGION_CHOICE" =~ ^[0-9]+$ ]] && [ "$REGION_CHOICE" -ge 1 ] && [ "$REGION_CHOICE" -le ${#AVAILABLE_REGIONS[@]} ]; then
+        REGION="${AVAILABLE_REGIONS[$((REGION_CHOICE-1))]}"
+    else
+        REGION="${AVAILABLE_REGIONS[0]}"
+        echo -e "${C_WARN}[!]${RESET} Invalid choice. Defaulting to: ${BOLD}${REGION}${RESET}"
+    fi
+fi
+
+echo ""
+echo -e "${C_SUCCESS}[✔]${RESET} Selected region: ${BOLD}${WHITE}${REGION}${RESET} ${GREEN}◉ READY${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
