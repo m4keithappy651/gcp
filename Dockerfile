@@ -3,26 +3,21 @@ FROM teddysun/xray:latest
 
 COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 
-# Create Caddyfile using heredoc (no escaping issues)
-RUN cat > /etc/caddy/Caddyfile <<'EOF'
-:8080 {
-    respond /health 200
-    handle_path /notragnar {
-        reverse_proxy localhost:8081
-    }
-}
-EOF
+# Create Caddyfile
+RUN echo ':8080 {' > /etc/caddy/Caddyfile
+RUN echo '    respond /health 200' >> /etc/caddy/Caddyfile
+RUN echo '    handle_path /notragnar {' >> /etc/caddy/Caddyfile
+RUN echo '        reverse_proxy localhost:8081' >> /etc/caddy/Caddyfile
+RUN echo '    }' >> /etc/caddy/Caddyfile
+RUN echo '}' >> /etc/caddy/Caddyfile
 
-# Copy Xray configuration
+# Copy Xray config
 COPY config.json /etc/xray/config.json
 
-# Create entrypoint script using heredoc
-RUN cat > /entrypoint.sh <<'EOF'
-#!/bin/sh
-/usr/bin/xray run -c /etc/xray/config.json &
-/usr/bin/caddy run --config /etc/caddy/Caddyfile
-EOF
-
+# Create entrypoint
+RUN echo '#!/bin/sh' > /entrypoint.sh
+RUN echo '/usr/bin/xray run -c /etc/xray/config.json &' >> /entrypoint.sh
+RUN echo '/usr/bin/caddy run --config /etc/caddy/Caddyfile' >> /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 8080
