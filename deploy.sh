@@ -2,8 +2,8 @@
 set -e
 
 # ==============================================
-#           VLESS REALITY GCP AUTO DEPLOYER
-#              created by prvtspyyy
+#           VLESS WEBSOCKET GCP AUTO DEPLOYER
+#                 created by prvtspyyy
 # ==============================================
 
 # --- ANSI color & style definitions ---
