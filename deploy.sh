@@ -2,8 +2,8 @@
 set -e
 
 # ==============================================
-#           VLESS WEBSOCKET GCP AUTO DEPLOYER
-#                 created by prvtspyyy
+#           VLESS WS TLS GCP AUTO DEPLOYER
+#              created by prvtspyyy
 # ==============================================
 
 # --- ANSI color & style definitions ---
@@ -69,7 +69,7 @@ rainbow_banner() {
     echo -ne "${LRED}╚═╝     ${LYELLOW}╚═╝  ╚═╝${LGREEN}  ╚═══╝  ${LCYAN}   ╚═╝   ${LBLUE}╚══════╝${LMAGENTA}╚═════╝ ${LRED}   ╚═╝   ${RESET}"
     echo -e "     ${BOLD}${LRED}║${RESET}"
     echo -e "${BOLD}${LRED}║${RESET}                                                                                ${BOLD}${LRED}║${RESET}"
-    echo -e "${BOLD}${LRED}║${RESET}                    ${BOLD}${WHITE}VLESS REALITY GCP AUTO DEPLOYER${RESET}                       ${BOLD}${LRED}║${RESET}"
+    echo -e "${BOLD}${LRED}║${RESET}                    ${BOLD}${WHITE}VLESS WS TLS GCP AUTO DEPLOYER${RESET}                       ${BOLD}${LRED}║${RESET}"
     echo -e "${BOLD}${LRED}║${RESET}                              ${CYAN}created by prvtspyyy${RESET}                             ${BOLD}${LRED}║${RESET}"
     echo -e "${BOLD}${LRED}║${RESET}                                                                                ${BOLD}${LRED}║${RESET}"
     echo -e "${BOLD}${LRED}╚══════════════════════════════════════════════════════════════════════════════╝${RESET}"
@@ -100,7 +100,7 @@ echo ""
 PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
 if [ -z "$PROJECT_ID" ]; then
     PROJECT_ID="vless-$(date +%s)"
-    gcloud projects create "$PROJECT_ID" --name="VLESS-Reality" --quiet
+    gcloud projects create "$PROJECT_ID" --name="VLESS-WS-TLS" --quiet
     gcloud config set project "$PROJECT_ID" --quiet
 fi
 echo -e "${C_SUCCESS}[✔]${RESET} Project: ${BOLD}${PROJECT_ID}${RESET}"
@@ -135,33 +135,11 @@ fi
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
-# --- CPU/RAM Selection ---
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "CPU AND MEMORY")${RESET}"
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "  ${C_ACCENT}[1]${RESET} 1 vCPU, 1 GiB RAM"
-echo -e "  ${C_ACCENT}[2]${RESET} 1 vCPU, 2 GiB RAM"
-echo -e "  ${C_ACCENT}[3]${RESET} 2 vCPU, 2 GiB RAM"
-read -p "$(echo -e "${C_INFO}[?]${RESET} Select [1-3]: ")" CHOICE
-case $CHOICE in
-    1) CPU="1"; MEMORY="1Gi" ;;
-    2) CPU="1"; MEMORY="2Gi" ;;
-    3) CPU="2"; MEMORY="2Gi" ;;
-    *) CPU="1"; MEMORY="1Gi" ;;
-esac
-echo -e "${C_SUCCESS}[✔]${RESET} CPU: ${BOLD}${CPU}${RESET}, Memory: ${BOLD}${MEMORY}${RESET}"
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo ""
-
-# ==============================================
-#        CUSTOMIZABLE SERVICE NAME ONLY
-# ==============================================
+# --- Service Name Customization ---
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo -e "${C_PLAIN}$(math_bold "SERVICE CONFIGURATION")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-
-# --- Customizable Service Name ---
-DEFAULT_SERVICE_NAME="prvtspyyy404"
+DEFAULT_SERVICE_NAME="prvtspyyy-vless"
 read -p "$(echo -e "${C_INFO}[?]${RESET} Enter service name [default: ${DEFAULT_SERVICE_NAME}]: ")" SERVICE_NAME_INPUT
 SERVICE_NAME="${SERVICE_NAME_INPUT:-$DEFAULT_SERVICE_NAME}"
 SERVICE_NAME=$(echo "$SERVICE_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
@@ -169,27 +147,51 @@ if [ -z "$SERVICE_NAME" ]; then
     SERVICE_NAME="$DEFAULT_SERVICE_NAME"
 fi
 echo -e "${C_SUCCESS}[✔]${RESET} Service name: ${BOLD}${SERVICE_NAME}${RESET}"
-
-# --- Fixed Values ---
-WS_PATH="/prvtspyyy404"
-UUID="a3b7de87-b46f-4dcf-b6ed-5bf5ebe83167"
-
-echo -e "${C_SUCCESS}[✔]${RESET} WebSocket path: ${BOLD}${WS_PATH}${RESET} (fixed)"
-echo -e "${C_SUCCESS}[✔]${RESET} UUID: ${BOLD}${UUID}${RESET} (fixed)"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
-# --- Build and Deploy ---
+# --- CPU/RAM Selection (Small to Large with Recommended) ---
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo -e "${C_PLAIN}$(math_bold "CPU AND MEMORY SELECTION")${RESET}"
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo -e "  ${C_ACCENT}[1]${RESET} 1 vCPU, 1 GiB RAM"
+echo -e "  ${C_ACCENT}[2]${RESET} 1 vCPU, 2 GiB RAM"
+echo -e "  ${C_ACCENT}[3]${RESET} 2 vCPU, 2 GiB RAM"
+echo -e "  ${C_ACCENT}[4]${RESET} 2 vCPU, 4 GiB RAM ${GREEN}(RECOMMENDED)${RESET}"
+echo -e "  ${C_ACCENT}[5]${RESET} 4 vCPU, 8 GiB RAM"
+read -p "$(echo -e "${C_INFO}[?]${RESET} Select configuration [1-5] [default: 4]: ")" CPU_RAM_CHOICE
+case $CPU_RAM_CHOICE in
+    1) CPU="1"; MEMORY="1Gi" ;;
+    2) CPU="1"; MEMORY="2Gi" ;;
+    3) CPU="2"; MEMORY="2Gi" ;;
+    4) CPU="2"; MEMORY="4Gi" ;;
+    5) CPU="4"; MEMORY="8Gi" ;;
+    *) CPU="2"; MEMORY="4Gi" ; echo -e "${C_WARN}[!]${RESET} Invalid choice, using recommended (2 vCPU, 4 GiB)" ;;
+esac
+echo -e "${C_SUCCESS}[✔]${RESET} CPU: ${BOLD}${CPU}${RESET}, Memory: ${BOLD}${MEMORY}${RESET}"
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo ""
+
+# --- Build Parameters ---
+UUID=$(grep -o '"id": "[^"]*' config.json | cut -d'"' -f4)
+WS_PATH=$(grep -o '"path": "[^"]*' config.json | cut -d'"' -f4)
 IMAGE="gcr.io/$PROJECT_ID/$SERVICE_NAME:latest"
 
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo -e "${C_PLAIN}$(math_bold "BUILDING AND DEPLOYING")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
-echo -e "${C_INFO}[*]${RESET} Building container image..."
-gcloud builds submit --tag "$IMAGE" . --quiet
+# Build
+echo -e "${C_INFO}[*]${RESET} Building Docker image..."
+docker build -t "$IMAGE" . --quiet
 echo -e "${C_SUCCESS}[✔]${RESET} Build complete"
 
+# Push
+echo -e "${C_INFO}[*]${RESET} Pushing to Container Registry..."
+docker push "$IMAGE" --quiet
+echo -e "${C_SUCCESS}[✔]${RESET} Push complete"
+
+# Deploy
 echo -e "${C_INFO}[*]${RESET} Deploying to Cloud Run..."
 gcloud run deploy "$SERVICE_NAME" \
     --image "$IMAGE" \
@@ -202,21 +204,22 @@ gcloud run deploy "$SERVICE_NAME" \
     --timeout 3600 \
     --quiet
 
-SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)' 2>/dev/null | sed 's|https://||')
+SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)' 2>/dev/null)
+CLEAN_HOST=$(echo "$SERVICE_URL" | sed 's|https://||')
 
-# --- Automatic VLESS URI Generation ---
-VLESS_URI="vless://${UUID}@${SERVICE_URL}:443?encryption=none&security=tls&type=ws&path=%2F${WS_PATH#/}#${SERVICE_NAME}"
+# --- VLESS Connection Template ---
+VLESS_URI="vless://${UUID}@${CLEAN_HOST}:443?encryption=none&security=tls&type=ws&path=%2F${WS_PATH#/}#${SERVICE_NAME}"
 
 echo ""
 echo -e "${C_SUCCESS}╔════════════════════════════════════════════════════════════════════════════╗${RESET}"
 echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${BOLD}${WHITE}$(math_bold "DEPLOYMENT SUCCESSFUL")${RESET}                                          ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}created by prvtspyyy404${RESET}                                           ${C_SUCCESS}║${RESET}"
+echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}created by prvtspyyy${RESET}                                              ${C_SUCCESS}║${RESET}"
 echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
 echo -e "${C_SUCCESS}╠════════════════════════════════════════════════════════════════════════════╣${RESET}"
 echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Service:${RESET}     ${BOLD}${SERVICE_NAME}${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Address:${RESET}     ${BOLD}${SERVICE_URL}${RESET}"
+echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Address:${RESET}     ${BOLD}${CLEAN_HOST}${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Port:${RESET}        ${BOLD}443${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}UUID:${RESET}        ${BOLD}${UUID}${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}WS Path:${RESET}     ${BOLD}${WS_PATH}${RESET}"
@@ -230,7 +233,9 @@ echo -e "${C_SUCCESS}║${RESET}                                                
 echo -e "${C_SUCCESS}╠════════════════════════════════════════════════════════════════════════════╣${RESET}"
 echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_PLAIN}Import URI:${RESET}                                                         ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${BOLD}${VLESS_URI}${RESET}  ${C_SUCCESS}║${RESET}"
+echo -e "${C_SUCCESS}║${RESET}   ${VLESS_URI}  ${C_SUCCESS}║${RESET}"
 echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
 echo -e "${C_SUCCESS}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
+echo ""
+echo -e "${C_INFO}[i]${RESET} Deployment Automation created by prvtspyyy"
 echo ""
