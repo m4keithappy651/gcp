@@ -250,7 +250,7 @@ echo -e "${C_HEADER}════════════════════
 echo ""
 
 
-    # --- Deploy to Cloud Run (No Timeout, Raw Execution) ---
+# --- Deploy to Cloud Run with Explicit 412 Handling ---
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo -e "${C_PLAIN}$(math_bold "DEPLOYING TO CLOUD RUN")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
@@ -258,8 +258,8 @@ echo -e "${C_HEADER}════════════════════
 IAM_POLICY_FAILED=false
 DEPLOY_LOG="/tmp/deploy_output.log"
 
-# Attempt 1: Public deployment (raw command, no timeout wrapper)
-echo -e "${C_INFO}[*]${RESET} Attempting public deployment (this may take several minutes)..."
+# Attempt 1: Public deployment
+echo -e "${C_INFO}[*]${RESET} Attempting public deployment..."
 gcloud run deploy vless-ws \
     --image "$IMAGE" \
     --platform managed \
@@ -269,29 +269,26 @@ gcloud run deploy vless-ws \
     --cpu "$CPU" \
     --memory "$MEMORY" \
     --timeout 3600 \
-    --quiet > "$DEPLOY_LOG" 2>&1
-DEPLOY_EXIT=$?
-
-if [ -s "$DEPLOY_LOG" ]; then
-    cat "$DEPLOY_LOG"
-fi
+    2>&1 | tee "$DEPLOY_LOG"
+DEPLOY_EXIT=${PIPESTATUS[0]}
 
 if [ $DEPLOY_EXIT -eq 0 ]; then
     echo -e "${C_SUCCESS}[✔]${RESET} Public deployment successful"
 else
-    if grep -q "FAILED_PRECONDITION.*Setting IAM policy\|Domain Restricted Sharing\|412" "$DEPLOY_LOG" 2>/dev/null; then
+    if grep -q "FAILED_PRECONDITION.*Setting IAM policy\|412" "$DEPLOY_LOG"; then
         IAM_POLICY_FAILED=true
-        echo -e "${C_WARN}[!]${RESET} Public deployment blocked by organization policy"
+        echo -e "${C_WARN}[!]${RESET} Public deployment blocked by Domain Restricted Sharing policy"
+        echo -e "${C_INFO}[*]${RESET} Automatically switching to private deployment..."
     else
-        echo -e "${C_ERROR}[✘]${RESET} Deployment failed with exit code: $DEPLOY_EXIT"
-        echo -e "${C_INFO}[*]${RESET} Check log: $DEPLOY_LOG"
+        echo -e "${C_ERROR}[✘]${RESET} Deployment failed with unexpected error (check log above)"
+        rm -f "$DEPLOY_LOG"
+        exit 1
     fi
 fi
 
-# Attempt 2: Private deployment (only if IAM policy blocked public)
+# Attempt 2: Private deployment (triggered automatically)
 if [ "$IAM_POLICY_FAILED" = true ]; then
     echo ""
-    echo -e "${C_INFO}[*]${RESET} Redeploying as private service (no timeout)..."
     gcloud run deploy vless-ws \
         --image "$IMAGE" \
         --platform managed \
@@ -300,17 +297,15 @@ if [ "$IAM_POLICY_FAILED" = true ]; then
         --cpu "$CPU" \
         --memory "$MEMORY" \
         --timeout 3600 \
-        --quiet > "$DEPLOY_LOG" 2>&1
-    DEPLOY_EXIT=$?
-    
-    if [ -s "$DEPLOY_LOG" ]; then
-        cat "$DEPLOY_LOG"
-    fi
+        2>&1 | tee "$DEPLOY_LOG"
+    DEPLOY_EXIT=${PIPESTATUS[0]}
     
     if [ $DEPLOY_EXIT -eq 0 ]; then
         echo -e "${C_SUCCESS}[✔]${RESET} Private deployment successful"
     else
-        echo -e "${C_ERROR}[✘]${RESET} Private deployment failed with exit code: $DEPLOY_EXIT"
+        echo -e "${C_ERROR}[✘]${RESET} Private deployment failed (check log above)"
+        rm -f "$DEPLOY_LOG"
+        exit 1
     fi
 fi
 
