@@ -250,6 +250,34 @@ echo -e "${C_ACCENT}Memory:${RESET}    ${BOLD}${MEMORY}${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
+# --- Service Name Configuration ---
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo -e "${C_PLAIN}$(math_bold "SERVICE NAME CONFIGURATION")${RESET}"
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+
+DEFAULT_SERVICE_NAME="vless-ws"
+read -p "$(echo -e "${C_INFO}[?]${RESET} Enter service name [default: ${DEFAULT_SERVICE_NAME}]: ")" SERVICE_NAME_INPUT
+
+if [ -z "$SERVICE_NAME_INPUT" ]; then
+    SERVICE_NAME="$DEFAULT_SERVICE_NAME"
+else
+    # Sanitize input: only allow lowercase letters, numbers, and hyphens
+    SERVICE_NAME=$(echo "$SERVICE_NAME_INPUT" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
+    if [ -z "$SERVICE_NAME" ]; then
+        SERVICE_NAME="$DEFAULT_SERVICE_NAME"
+        echo -e "${C_WARN}[!]${RESET} Invalid name. Using default: ${BOLD}${SERVICE_NAME}${RESET}"
+    fi
+fi
+
+# Hardcoded fallback to guarantee service name is never empty
+if [ -z "$SERVICE_NAME" ]; then
+    SERVICE_NAME="$DEFAULT_SERVICE_NAME"
+fi
+
+echo -e "${C_SUCCESS}[✔]${RESET} Service name: ${BOLD}${SERVICE_NAME}${RESET}"
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo ""
+
 # --- Build Docker Image ---
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo -e "${C_PLAIN}$(math_bold "BUILDING DOCKER IMAGE")${RESET}"
