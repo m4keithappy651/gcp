@@ -29,7 +29,7 @@ LMAGENTA='\033[1;35m'
 LCYAN='\033[1;36m'
 LWHITE='\033[1;37m'
 
-# Combined light+color
+# Combined styles
 C_SUCCESS="${BOLD}${LGREEN}"
 C_ERROR="${BOLD}${LRED}"
 C_WARN="${BOLD}${LYELLOW}"
@@ -38,7 +38,7 @@ C_HEADER="${BOLD}${LMAGENTA}"
 C_ACCENT="${BOLD}${LBLUE}"
 C_PLAIN="${BOLD}${WHITE}"
 
-# --- Bold mathematical Unicode converter ---
+# --- Bold mathematical Unicode converter (A-Z, 0-9) ---
 math_bold() {
     echo "$1" | sed -e 's/A/𝗔/g' -e 's/B/𝗕/g' -e 's/C/𝗖/g' -e 's/D/𝗗/g' -e 's/E/𝗘/g' \
         -e 's/F/𝗙/g' -e 's/G/𝗚/g' -e 's/H/𝗛/g' -e 's/I/𝗜/g' -e 's/J/𝗝/g' \
@@ -76,11 +76,9 @@ check_enable_api() {
     fi
 }
 
-# --- Function: Fetch online regions only ---
+# --- Function: Get online regions that support Cloud Run ---
 get_online_regions() {
-    # Get all regions that are UP and filter for those that support Cloud Run
     gcloud compute regions list --format="value(name)" --filter="status=UP" 2>/dev/null | while read -r reg; do
-        # Check if region supports Cloud Run (run.googleapis.com)
         if gcloud run regions list --format="value(name)" 2>/dev/null | grep -qx "$reg"; then
             echo "$reg"
         fi
@@ -137,7 +135,7 @@ check_enable_api "compute.googleapis.com" "Compute Engine API"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
-# --- Region Selection (only online regions) ---
+# --- Region Selection (online only) ---
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo -e "${C_PLAIN}$(math_bold "REGION SELECTION")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
@@ -233,12 +231,16 @@ echo -e "${C_SUCCESS}[✔]${RESET} Push completed"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
-# --- Deploy to Cloud Run with Public Access and Timeout ---
+# --- Deploy to Cloud Run with Public Access Attempt and Auto-Fallback ---
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo -e "${C_PLAIN}$(math_bold "DEPLOYING TO CLOUD RUN")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_INFO}[*]${RESET} Deploying service with public access (timeout 3600s)..."
 
+DEPLOY_PUBLIC_SUCCESS=false
+IAM_POLICY_FAILED=false
+
+# Attempt 1: Public deployment (with allow-unauthenticated)
+echo -e "${C_INFO}[*]${RESET} Attempting public deployment..."
 DEPLOY_OUTPUT=$(gcloud run deploy vless-ws \
     --image "$IMAGE" \
     --platform managed \
@@ -248,42 +250,139 @@ DEPLOY_OUTPUT=$(gcloud run deploy vless-ws \
     --cpu "$CPU" \
     --memory "$MEMORY" \
     --timeout 3600 \
-    --quiet 2>&1)
+    2>&1)
 DEPLOY_EXIT=$?
 
 if [ $DEPLOY_EXIT -eq 0 ]; then
-    echo -e "${C_SUCCESS}[✔]${RESET} Deployment successful"
+    DEPLOY_PUBLIC_SUCCESS=true
+    echo -e "${C_SUCCESS}[✔]${RESET} Public deployment successful"
 else
-    echo -e "${C_ERROR}[✘]${RESET} Deployment failed"
-    echo ""
-    echo -e "${C_WARN}════════════════════════════════════════════════════════════════════════════${RESET}"
-    echo -e "${C_PLAIN}$(math_bold "TROUBLESHOOTING GUIDE")${RESET}"
-    echo -e "${C_WARN}════════════════════════════════════════════════════════════════════════════${RESET}"
-    if echo "$DEPLOY_OUTPUT" | grep -q "Quota exceeded"; then
-        echo -e "${C_ERROR}[✘]${RESET} Quota exceeded in region ${REGION}"
-        echo -e "${C_INFO}[→]${RESET} Solution: Choose a different region or request quota increase"
-    elif echo "$DEPLOY_OUTPUT" | grep -q "FAILED_PRECONDITION"; then
-        echo -e "${C_ERROR}[✘]${RESET} Organization policy violation (Domain Restricted Sharing)"
-        echo -e "${C_INFO}[→]${RESET} Solution: Deploy as private or use personal GCP account"
-        echo -e "${C_INFO}[→]${RESET} To deploy private: remove --allow-unauthenticated and configure IAM"
-    elif echo "$DEPLOY_OUTPUT" | grep -q "Permission denied"; then
-        echo -e "${C_ERROR}[✘]${RESET} Insufficient permissions"
-        echo -e "${C_INFO}[→]${RESET} Solution: Ensure you have roles/run.admin and roles/iam.serviceAccountUser"
+    # Check for IAM policy / Domain Restricted Sharing error
+    if echo "$DEPLOY_OUTPUT" | grep -q "FAILED_PRECONDITION.*Setting IAM policy\|Domain Restricted Sharing"; then
+        IAM_POLICY_FAILED=true
+        echo -e "${C_WARN}[!]${RESET} Public deployment blocked by organization policy (Domain Restricted Sharing)"
     else
-        echo -e "${C_ERROR}[✘]${RESET} Unknown error. Check logs:"
+        echo -e "${C_ERROR}[✘]${RESET} Deployment failed with unexpected error:"
         echo "$DEPLOY_OUTPUT"
+        exit 1
     fi
-    echo -e "${C_WARN}════════════════════════════════════════════════════════════════════════════${RESET}"
-    exit 1
 fi
+
+# Attempt 2: Private deployment (if public failed due to IAM policy)
+if [ "$IAM_POLICY_FAILED" = true ]; then
+    echo ""
+    echo -e "${C_INFO}[*]${RESET} Redeploying as private service (authentication required)..."
+    DEPLOY_OUTPUT=$(gcloud run deploy vless-ws \
+        --image "$IMAGE" \
+        --platform managed \
+        --region "$REGION" \
+        --port 8080 \
+        --cpu "$CPU" \
+        --memory "$MEMORY" \
+        --timeout 3600 \
+        2>&1)
+    DEPLOY_EXIT=$?
+    if [ $DEPLOY_EXIT -eq 0 ]; then
+        echo -e "${C_SUCCESS}[✔]${RESET} Private deployment successful"
+    else
+        echo -e "${C_ERROR}[✘]${RESET} Private deployment also failed:"
+        echo "$DEPLOY_OUTPUT"
+        exit 1
+    fi
+fi
+
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo ""
 
 # --- Retrieve Service URL ---
 SERVICE_URL=$(gcloud run services describe vless-ws --region "$REGION" --format='value(status.url)' 2>/dev/null)
 CLEAN_HOST=$(echo "$SERVICE_URL" | sed 's|https://||')
 VLESS_URI="vless://${UUID}@${CLEAN_HOST}:443?encryption=none&security=tls&type=ws&path=${WS_PATH}#GCP-VLESS-PRVTSPYYY"
 
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo ""
+# --- Post-Deployment: Service Account Setup (if private deployment was used) ---
+if [ "$IAM_POLICY_FAILED" = true ]; then
+    echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+    echo -e "${C_PLAIN}$(math_bold "CONFIGURING SERVICE AUTHENTICATION")${RESET}"
+    echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+    
+    SA_NAME="vless-client-sa"
+    SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+    
+    # Create service account
+    echo -e "${C_INFO}[*]${RESET} Creating service account: ${BOLD}${SA_NAME}${RESET}"
+    if gcloud iam service-accounts describe "$SA_EMAIL" &>/dev/null; then
+        echo -e "${C_SUCCESS}[✔]${RESET} Service account already exists"
+    else
+        gcloud iam service-accounts create "$SA_NAME" \
+            --display-name="VLESS Client Service Account" \
+            --quiet
+        echo -e "${C_SUCCESS}[✔]${RESET} Service account created"
+    fi
+    
+    # Grant invoker role
+    echo -e "${C_INFO}[*]${RESET} Granting Cloud Run Invoker permission..."
+    gcloud run services add-iam-policy-binding vless-ws \
+        --region="$REGION" \
+        --member="serviceAccount:${SA_EMAIL}" \
+        --role="roles/run.invoker" \
+        --quiet
+    echo -e "${C_SUCCESS}[✔]${RESET} Invoker role granted"
+    
+    # Create and download key
+    echo -e "${C_INFO}[*]${RESET} Generating service account key..."
+    KEY_FILE="$HOME/vless-client-key.json"
+    gcloud iam service-accounts keys create "$KEY_FILE" \
+        --iam-account="$SA_EMAIL" \
+        --quiet
+    echo -e "${C_SUCCESS}[✔]${RESET} Key saved to: ${BOLD}${KEY_FILE}${RESET}"
+    
+    # Generate authentication helper script
+    cat > "$HOME/vless-auth.sh" <<'AUTH_EOF'
+#!/bin/bash
+KEY_FILE="$HOME/vless-client-key.json"
+SERVICE_URL="PLACEHOLDER_URL"
+
+if [ ! -f "$KEY_FILE" ]; then
+    echo "Error: Service account key not found at $KEY_FILE"
+    exit 1
+fi
+
+TOKEN=$(gcloud auth print-identity-token \
+    --impersonate-service-account="$(jq -r .client_email $KEY_FILE)" \
+    --audiences="$SERVICE_URL" \
+    --include-email 2>/dev/null)
+
+if [ -n "$TOKEN" ]; then
+    echo "Bearer $TOKEN"
+else
+    echo "Error: Failed to generate token"
+    exit 1
+fi
+AUTH_EOF
+    sed -i "s|PLACEHOLDER_URL|$SERVICE_URL|g" "$HOME/vless-auth.sh"
+    chmod +x "$HOME/vless-auth.sh"
+    echo -e "${C_SUCCESS}[✔]${RESET} Authentication script created: ${BOLD}$HOME/vless-auth.sh${RESET}"
+    
+    echo ""
+    echo -e "${C_WARN}╔════════════════════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${C_WARN}║${RESET} ${BOLD}⚠️  CLIENT AUTHENTICATION REQUIRED${RESET}                                               ${C_WARN}║${RESET}"
+    echo -e "${C_WARN}╠════════════════════════════════════════════════════════════════════════════╣${RESET}"
+    echo -e "${C_WARN}║${RESET} This service is PRIVATE. Your VLESS client must authenticate.                 ${C_WARN}║${RESET}"
+    echo -e "${C_WARN}║${RESET}                                                                                ${C_WARN}║${RESET}"
+    echo -e "${C_WARN}║${RESET} ${C_ACCENT}Option 1 (Automated):${RESET} Run before connecting:                                  ${C_WARN}║${RESET}"
+    echo -e "${C_WARN}║${RESET}     ${GREEN}$HOME/vless-auth.sh${RESET}                                            ${C_WARN}║${RESET}"
+    echo -e "${C_WARN}║${RESET}                                                                                ${C_WARN}║${RESET}"
+    echo -e "${C_WARN}║${RESET} ${C_ACCENT}Option 2 (Manual):${RESET} Generate token with:                                        ${C_WARN}║${RESET}"
+    echo -e "${C_WARN}║${RESET}     ${GREEN}gcloud auth print-identity-token \\${RESET}                                 ${C_WARN}║${RESET}"
+    echo -e "${C_WARN}║${RESET}     ${GREEN}  --impersonate-service-account=${SA_EMAIL} \\${RESET}                          ${C_WARN}║${RESET}"
+    echo -e "${C_WARN}║${RESET}     ${GREEN}  --audiences=${SERVICE_URL}${RESET}                                           ${C_WARN}║${RESET}"
+    echo -e "${C_WARN}║${RESET}                                                                                ${C_WARN}║${RESET}"
+    echo -e "${C_WARN}║${RESET} ${C_ACCENT}Option 3 (Client Config):${RESET} Add header to VLESS client:                      ${C_WARN}║${RESET}"
+    echo -e "${C_WARN}║${RESET}     ${GREEN}Authorization: Bearer \$(./vless-auth.sh)${RESET}                               ${C_WARN}║${RESET}"
+    echo -e "${C_WARN}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
+    echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+    echo ""
+fi
 
 # --- Success Banner ---
 echo -e "${C_SUCCESS}╔════════════════════════════════════════════════════════════════════════════╗${RESET}"
@@ -303,14 +402,8 @@ echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Region:${RESET}      ${BOLD}${REGI
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}CPU:${RESET}         ${BOLD}${CPU}${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Memory:${RESET}      ${BOLD}${MEMORY}${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Timeout:${RESET}     ${BOLD}3600s${RESET}"
-echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}╠════════════════════════════════════════════════════════════════════════════╣${RESET}"
-echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${C_PLAIN}Import URI:${RESET}                                                         ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}║${RESET}   ${VLESS_URI}  ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
-echo -e "${C_SUCCESS}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
-echo ""
-echo -e "${C_INFO}[i]${RESET} To change UUID or Path, edit config.json and redeploy."
-echo -e "${C_INFO}[i]${RESET} Deployment created by prvtspyyy"
-echo ""
+if [ "$IAM_POLICY_FAILED" = true ]; then
+    echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Access:${RESET}      ${BOLD}Private (authentication required)${RESET}"
+else
+    echo -e "${C_SUCCESS}║${RESET}   ${C_ACCENT}Access:${RESET}      ${BOLD}Public${RESET}"
+f
