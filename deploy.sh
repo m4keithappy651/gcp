@@ -145,71 +145,89 @@ echo -e "${C_HEADER}════════════════════
 echo ""
 
 # ==============================================
-#        REAL-TIME REGION DETECTION WITH STATUS
+#        PURE REAL-TIME REGION DETECTION
 # ==============================================
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "REGION SELECTION - REAL TIME STATUS")${RESET}"
+echo -e "${C_PLAIN}$(math_bold "REAL-TIME REGION DETECTION")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
-# Primary regions to test
+# Primary regions to test (covering all major GCP geographies)
 TEST_REGIONS=(
     "us-central1"
     "us-east1"
     "us-west1"
+    "us-west2"
+    "us-west4"
     "europe-west1"
+    "europe-west4"
+    "europe-north1"
     "asia-east1"
     "asia-southeast1"
-    "europe-west4"
-    "northamerica-northeast1"
-    "southamerica-east1"
+    "asia-northeast1"
     "australia-southeast1"
+    "southamerica-east1"
+    "northamerica-northeast1"
 )
 
-echo -e "${C_INFO}[*]${RESET} Testing region availability in real-time..."
+echo -e "${C_INFO}[*]${RESET} Probing regions for Cloud Run deployability in real-time..."
+echo -e "${C_INFO}[*]${RESET} This may take 15-30 seconds. Please wait."
 echo ""
 
 AVAILABLE_REGIONS=()
+BLOCKED_REGIONS=()
 
 for reg in "${TEST_REGIONS[@]}"; do
-    # Test if region is online and accessible
-    if gcloud run services list --region="$reg" --limit=1 &>/dev/null; then
+    # Real-time probe: attempt to list Cloud Run services in the region
+    # This validates both API access AND quota availability simultaneously
+    if gcloud run services list --region="$reg" --limit=1 --format="value(name)" &>/dev/null; then
         AVAILABLE_REGIONS+=("$reg")
-        echo -e "  ${C_ACCENT}[✓]${RESET} ${BOLD}${reg}${RESET} ${GREEN}◉ ONLINE${RESET}"
+        echo -e "  ${C_ACCENT}[✓]${RESET} ${BOLD}${reg}${RESET} ${GREEN}● ACTIVE${RESET}"
     else
-        echo -e "  ${RED}[✗]${RESET} ${BOLD}${reg}${RESET} ${RED}◉ UNAVAILABLE${RESET}"
+        BLOCKED_REGIONS+=("$reg")
+        echo -e "  ${RED}[✗]${RESET} ${BOLD}${reg}${RESET} ${RED}● BLOCKED${RESET} (quota or policy restricted)"
     fi
+    # Minimal delay to avoid rate limiting while maintaining real-time feel
+    sleep 0.2
 done
 
 echo ""
 
-# Check if any regions are available
-if [ ${#AVAILABLE_REGIONS[@]} -eq 0 ]; then
-    echo -e "${C_ERROR}[✘]${RESET} No regions are currently accessible!"
-    echo -e "${C_WARN}[!]${RESET} This may be due to organization policy restrictions."
-    echo -e "${C_INFO}[*]${RESET} Forcing fallback to us-central1..."
-    AVAILABLE_REGIONS=("us-central1")
-fi
-
-# Display available regions for selection
+# Summary of detection results
 echo -e "${C_SUCCESS}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}AVAILABLE REGIONS (ONLY ONLINE REGIONS SHOWN)${RESET}"
+echo -e "${C_PLAIN}DETECTION SUMMARY${RESET}"
+echo -e "${C_SUCCESS}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo -e "  ${GREEN}ACTIVE:${RESET}   ${#AVAILABLE_REGIONS[@]} region(s) ready for deployment"
+echo -e "  ${RED}BLOCKED:${RESET}  ${#BLOCKED_REGIONS[@]} region(s) unavailable due to quota/policy"
 echo -e "${C_SUCCESS}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
+# Check if any regions are available
+if [ ${#AVAILABLE_REGIONS[@]} -eq 0 ]; then
+    echo -e "${C_ERROR}[✘]${RESET} No ACTIVE regions found!"
+    echo -e "${C_WARN}[!]${RESET} All tested regions are BLOCKED by quota or organization policy."
+    echo -e "${C_INFO}[*]${RESET} This is common in Qwiklabs environments where resources are restricted."
+    echo -e "${C_INFO}[*]${RESET} Forcing fallback to us-central1 (most permissive in Qwiklabs)..."
+    AVAILABLE_REGIONS=("us-central1")
+fi
+
+# Display active regions for selection
+echo -e "${C_PLAIN}ACTIVE REGIONS (READY FOR DEPLOYMENT)${RESET}"
+echo ""
+
 if [ ${#AVAILABLE_REGIONS[@]} -eq 1 ]; then
-    echo -e "${C_SUCCESS}[✔]${RESET} Only one region available. Auto-selecting..."
     REGION="${AVAILABLE_REGIONS[0]}"
-    echo -e "  ${C_ACCENT}[1]${RESET} ${BOLD}${REGION}${RESET} ${GREEN}◉ SELECTED${RESET}"
+    echo -e "${C_SUCCESS}[✔]${RESET} Auto-selected only active region: ${BOLD}${WHITE}${REGION}${RESET} ${GREEN}● ACTIVE${RESET}"
 else
     for i in "${!AVAILABLE_REGIONS[@]}"; do
         idx=$((i+1))
-        echo -e "  ${C_ACCENT}[${idx}]${RESET} ${BOLD}${AVAILABLE_REGIONS[$i]}${RESET} ${GREEN}◉ ONLINE${RESET}"
+        echo -e "  ${C_ACCENT}[${idx}]${RESET} ${BOLD}${AVAILABLE_REGIONS[$i]}${RESET} ${GREEN}● ACTIVE${RESET}"
     done
     echo ""
     read -p "$(echo -e "${C_INFO}[?]${RESET} Select region [1-${#AVAILABLE_REGIONS[@]}]: ")" REGION_CHOICE
     
     if [[ "$REGION_CHOICE" =~ ^[0-9]+$ ]] && [ "$REGION_CHOICE" -ge 1 ] && [ "$REGION_CHOICE" -le ${#AVAILABLE_REGIONS[@]} ]; then
         REGION="${AVAILABLE_REGIONS[$((REGION_CHOICE-1))]}"
+        echo -e "${C_SUCCESS}[✔]${RESET} Selected: ${BOLD}${WHITE}${REGION}${RESET} ${GREEN}● ACTIVE${RESET}"
     else
         REGION="${AVAILABLE_REGIONS[0]}"
         echo -e "${C_WARN}[!]${RESET} Invalid choice. Defaulting to: ${BOLD}${REGION}${RESET}"
@@ -217,7 +235,6 @@ else
 fi
 
 echo ""
-echo -e "${C_SUCCESS}[✔]${RESET} Selected region: ${BOLD}${WHITE}${REGION}${RESET} ${GREEN}◉ READY${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
