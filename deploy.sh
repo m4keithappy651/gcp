@@ -248,6 +248,8 @@ echo -e "${C_SUCCESS}║${RESET}                                                
 echo -e "${C_SUCCESS}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
 echo ""
 echo -e "${C_INFO}[i]${RESET} Deployment Automation created by prvtspyyy"
+SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)' 2>/dev/null)
+CLEAN_HOST=$(echo "$SERVICE_URL" | sed 's|https://||')
 echo ""
 
 
