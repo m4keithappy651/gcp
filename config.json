@@ -20,10 +20,15 @@
         "network": "ws",
         "security": "none",
         "wsSettings": {
-          "path": "/prvtspyyy"
+          "path": "/prvtspyyy",
+          "headers": {
+            "Host": "cloud.google.com"
+          }
         },
         "sockopt": {
-          "tcpFastOpen": true
+          "tcpFastOpen": true,
+          "tproxy": "off",
+          "mark": 0
         }
       },
       "sniffing": {
@@ -41,9 +46,24 @@
       },
       "streamSettings": {
         "sockopt": {
-          "tcpFastOpen": true
+          "tcpFastOpen": true,
+          "mark": 0
         }
       }
+    },
+    {
+      "protocol": "blackhole",
+      "tag": "block"
     }
-  ]
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field",
+        "ip": ["geoip:private"],
+        "outboundTag": "block"
+      }
+    ]
+  }
 }
