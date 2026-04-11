@@ -201,26 +201,24 @@ echo -e "${C_INFO}[*]${RESET} Pushing to Container Registry..."
 docker push "$IMAGE" --quiet
 echo -e "${C_SUCCESS}[✔]${RESET} Push complete"
 
-# Deploy
+# --- Deploy to Cloud Run ---
 echo -e "${C_INFO}[*]${RESET} Deploying to Cloud Run..."
-
-gcloud builds submit --tag gcr.io/$PROJECT_ID/$SERVICE_NAME:latest . --quiet
 gcloud run deploy "$SERVICE_NAME" \
     --image "$IMAGE" \
     --platform managed \
     --region "$REGION" \
     --allow-unauthenticated \
     --port 8080 \
-    --cpu 2 \
-    --memory 4Gi \
-    --concurrency 80 \
+    --cpu "$CPU" \
+    --memory "$MEMORY" \
     --timeout 3600 \
     --min-instances 1 \
     --max-instances 1 \
     --no-cpu-throttling \
     --session-affinity \
+    --concurrency 80 \
     --quiet
-    
+
 SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)' 2>/dev/null)
 CLEAN_HOST=$(echo "$SERVICE_URL" | sed 's|https://||')
 
