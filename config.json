@@ -1,49 +1,45 @@
 {
-  "log": {
-    "loglevel": "warning"
+  "log": { "loglevel": "warning" },
+  "inbounds": [{
+    "listen": "0.0.0.0",
+    "port": 8080,
+    "protocol": "vless",
+    "settings": {
+      "clients": [{"id": "9e507b33-65b6-40a4-b37f-eabad158b645", "flow": ""}],
+      "decryption": "none"
+    },
+    "streamSettings": {
+      "network": "ws",
+      "security": "none",
+      "wsSettings": {
+        "path": "/prvtspyyy",
+        "maxEarlyData": 4096,
+        "browserForwarding": true
+      },
+      "sockopt": {
+        "tcpFastOpen": true,
+        "tcpKeepAliveInterval": 30
+      }
+    },
+    "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
+  }],
+  "outbounds": [{
+    "protocol": "freedom",
+    "tag": "direct",
+    "settings": {"domainStrategy": "UseIPv4"},
+    "streamSettings": {
+      "sockopt": {
+        "tcpFastOpen": true,
+        "tcpKeepAliveInterval": 30
+      }
+    }
+  }],
+  "transport": {
+    "maxBufferSize": 10485760,
+    "maxStreamBufferSize": 5242880
   },
-  "inbounds": [
-    {
-      "listen": "0.0.0.0",
-      "port": 8080,
-      "protocol": "vless",
-      "settings": {
-        "clients": [
-          {
-            "id": "9e507b33-65b6-40a4-b37f-eabad158b645",
-            "flow": ""
-          }
-        ],
-        "decryption": "none"
-      },
-      "streamSettings": {
-        "network": "ws",
-        "security": "none",
-        "wsSettings": {
-          "path": "/prvtspyyy"
-        },
-        "sockopt": {
-          "tcpFastOpen": true
-        }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls"]
-      }
-    }
-  ],
-  "outbounds": [
-    {
-      "protocol": "freedom",
-      "tag": "direct",
-      "settings": {
-        "domainStrategy": "UseIPv4"
-      },
-      "streamSettings": {
-        "sockopt": {
-          "tcpFastOpen": true
-        }
-      }
-    }
-  ]
+  "mux": {
+    "enabled": true,
+    "concurrency": 16
+  }
 }
