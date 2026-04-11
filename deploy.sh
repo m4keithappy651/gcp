@@ -250,28 +250,6 @@ echo ""
 echo -e "${C_INFO}[i]${RESET} Deployment Automation created by prvtspyyy"
 echo ""
 
-# ==============================================
-#        AUTOMATIC LATENCY OPTIMIZATION
-# ==============================================
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "APPLYING LATENCY OPTIMIZATION")${RESET}"
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-
-# Check if cdn-optimize.sh exists and run it
-if [ -f "./cdn-optimize.sh" ]; then
-    echo -e "${C_INFO}[*]${RESET} Running CDN latency optimizer..."
-    chmod +x ./cdn-optimize.sh
-    ./cdn-optimize.sh "$SERVICE_NAME" "$REGION"
-    echo -e "${C_SUCCESS}[✔]${RESET} Latency optimization applied"
-else
-    echo -e "${C_WARN}[!]${RESET} cdn-optimize.sh not found. Skipping latency optimization."
-    echo -e "${C_INFO}[*]${RESET} Add cdn-optimize.sh to your repository for automatic latency reduction."
-fi
-
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo ""
-echo -e "${C_INFO}[i]${RESET} Deployment created by prvtspyyy"
-echo ""
 
 # ==============================================
 #        AUTOMATIC NETWORK MONITOR (BACKGROUND)
