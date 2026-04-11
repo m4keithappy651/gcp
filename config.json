@@ -1,69 +1,28 @@
 {
-  "log": {
-    "loglevel": "warning"
-  },
-  "inbounds": [
-    {
-      "listen": "0.0.0.0",
-      "port": 8080,
-      "protocol": "vless",
-      "settings": {
-        "clients": [
-          {
-            "id": "9e507b33-65b6-40a4-b37f-eabad158b645",
-            "flow": ""
-          }
-        ],
-        "decryption": "none"
-      },
-      "streamSettings": {
-        "network": "ws",
-        "security": "none",
-        "wsSettings": {
-          "path": "/prvtspyyy",
-          "headers": {
-            "Host": "cloud.google.com"
-          }
-        },
-        "sockopt": {
-          "tcpFastOpen": true,
-          "tproxy": "off",
-          "mark": 0
-        }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls"]
-      }
-    }
-  ],
-  "outbounds": [
-    {
-      "protocol": "freedom",
-      "tag": "direct",
-      "settings": {
-        "domainStrategy": "UseIPv4"
-      },
-      "streamSettings": {
-        "sockopt": {
-          "tcpFastOpen": true,
-          "mark": 0
-        }
-      }
+  "log": { "loglevel": "warning" },
+  "inbounds": [{
+    "listen": "0.0.0.0",
+    "port": 8080,
+    "protocol": "vless",
+    "settings": {
+      "clients": [{"id": "9e507b33-65b6-40a4-b37f-eabad158b645", "flow": ""}],
+      "decryption": "none"
     },
-    {
-      "protocol": "blackhole",
-      "tag": "block"
-    }
-  ],
-  "routing": {
-    "domainStrategy": "AsIs",
-    "rules": [
-      {
-        "type": "field",
-        "ip": ["geoip:private"],
-        "outboundTag": "block"
-      }
-    ]
-  }
+    "streamSettings": {
+      "network": "ws",
+      "security": "none",
+      "wsSettings": {
+        "path": "/prvtspyyy",
+        "headers": {"Host": "cloud.google.com"}
+      },
+      "sockopt": {"tcpFastOpen": true}
+    },
+    "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}
+  }],
+  "outbounds": [{
+    "protocol": "freedom",
+    "tag": "direct",
+    "settings": {"domainStrategy": "UseIPv4"},
+    "streamSettings": {"sockopt": {"tcpFastOpen": true}}
+  }]
 }
