@@ -21,6 +21,9 @@
         "security": "none",
         "wsSettings": {
           "path": "/prvtspyyy"
+        },
+        "sockopt": {
+          "tcpFastOpen": true
         }
       },
       "sniffing": {
@@ -35,6 +38,11 @@
       "tag": "direct",
       "settings": {
         "domainStrategy": "UseIPv4"
+      },
+      "streamSettings": {
+        "sockopt": {
+          "tcpFastOpen": true
+        }
       }
     }
   ]
