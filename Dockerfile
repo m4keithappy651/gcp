@@ -1,36 +1,19 @@
-# Stage 1: Build the supervisor (health server + Xray launcher)
-FROM golang:1.21-alpine AS builder
-WORKDIR /app
+FROM teddysun/xray:latest
 
-# Create the supervisor Go program
-RUN echo 'package main; import ("net/http"; "os/exec"; "log"); func main() { go func() { http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }); log.Fatal(http.ListenAndServe(":8080", nil)) }(); cmd := exec.Command("/app/xray", "run", "-c", "/app/config.json"); cmd.Stdout = log.Writer(); cmd.Stderr = log.Writer(); log.Fatal(cmd.Run()) }' > main.go
+# Install only the essential lightweight web server for health checks
+RUN apk update && apk add --no-cache busybox-extras && \
+    rm -rf /var/cache/apk/*
 
-# Build the static binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o supervisor main.go
+# Copy your optimized Xray configuration
+COPY config.json /etc/xray/config.json
 
-# Stage 2: Download and prepare Xray
-FROM alpine:latest AS xray-prep
-RUN apk add --no-cache wget unzip && \
-    wget -q https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip && \
-    unzip Xray-linux-64.zip && \
-    chmod +x xray
-
-# Stage 3: Final minimal image
-FROM gcr.io/distroless/static-debian12:nonroot
-WORKDIR /app
-
-# Copy the supervisor binary from Stage 1
-COPY --from=builder /app/supervisor /app/supervisor
-
-# Copy Xray binary and assets from Stage 2
-COPY --from=xray-prep /xray /app/xray
-COPY --from=xray-prep /geoip.dat /app/geoip.dat
-COPY --from=xray-prep /geosite.dat /app/geosite.dat
-
-# Copy your Xray configuration
-COPY config.json /app/config.json
-
-USER nonroot:nonroot
+# Create a robust entrypoint script that properly backgrounds the health server
+RUN echo '#!/bin/sh' > /entrypoint.sh && \
+    echo '# Start a simple HTTP server for Cloud Run health checks on port 8080' >> /entrypoint.sh && \
+    echo 'busybox httpd -f -p 8080 -h /tmp &' >> /entrypoint.sh && \
+    echo '# Start Xray as the main foreground process' >> /entrypoint.sh && \
+    echo 'exec /usr/bin/xray run -c /etc/xray/config.json' >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh
 
 EXPOSE 8080
-ENTRYPOINT ["/app/supervisor"]
+ENTRYPOINT ["/entrypoint.sh"]
