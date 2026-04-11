@@ -78,20 +78,30 @@ rainbow_banner() {
 
 rainbow_banner
 
-# --- API Verification ---
+# ==============================================
+#        FAILSAFE API VERIFICATION
+# ==============================================
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo -e "${C_PLAIN}$(math_bold "API VERIFICATION")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
-REQUIRED_APIS=("run.googleapis.com" "containerregistry.googleapis.com" "cloudbuild.googleapis.com")
-API_NAMES=("Cloud Run API" "Container Registry API" "Cloud Build API")
+REQUIRED_APIS=("run.googleapis.com" "containerregistry.googleapis.com" "cloudbuild.googleapis.com" "compute.googleapis.com")
+API_NAMES=("Cloud Run API" "Container Registry API" "Cloud Build API" "Compute Engine API")
 
 for i in "${!REQUIRED_APIS[@]}"; do
     API="${REQUIRED_APIS[$i]}"
     NAME="${API_NAMES[$i]}"
-    echo -e "${C_INFO}[*]${RESET} Ensuring ${BOLD}${NAME}${RESET} is enabled..."
-    gcloud services enable "${API}" --quiet 2>/dev/null
-    echo -e "${C_SUCCESS}[✔]${RESET} ${NAME} ready"
+    echo -e "${C_INFO}[*]${RESET} Checking ${BOLD}${NAME}${RESET}..."
+    
+    # Check if API is already enabled
+    if gcloud services list --enabled --filter="name:${API}" --format="value(name)" 2>/dev/null | grep -q "${API}"; then
+        echo -e "${C_SUCCESS}[✔]${RESET} ${NAME} already enabled"
+    else
+        echo -e "${C_WARN}[!]${RESET} Enabling ${NAME}..."
+        # Use || true to prevent set -e from killing script
+        gcloud services enable "${API}" --quiet 2>/dev/null || true
+        echo -e "${C_SUCCESS}[✔]${RESET} ${NAME} enablement requested"
+    fi
 done
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
