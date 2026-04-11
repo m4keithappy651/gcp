@@ -285,6 +285,27 @@ echo -e "${C_HEADER}════════════════════
 echo ""
 
 # ==============================================
+#        AUTOMATIC CDN & LATENCY OPTIMIZATION
+# ==============================================
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo -e "${C_PLAIN}$(math_bold "APPLYING QUOTA-SAFE CDN OPTIMIZATION")${RESET}"
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+
+# Check if cdn-optimize.sh exists and run it
+if [ -f "./cdn-optimize.sh" ]; then
+    echo -e "${C_INFO}[*]${RESET} Running CDN latency optimizer..."
+    chmod +x ./cdn-optimize.sh
+    ./cdn-optimize.sh "$SERVICE_NAME" "$REGION"
+    echo -e "${C_SUCCESS}[✔]${RESET} CDN optimization applied successfully"
+else
+    echo -e "${C_WARN}[!]${RESET} cdn-optimize.sh not found. Skipping CDN optimization."
+    echo -e "${C_INFO}[*]${RESET} Add cdn-optimize.sh to your repository for automatic edge caching."
+fi
+
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo ""
+
+# ==============================================
 #        INTERACTIVE OUTPUT SELECTION
 # ==============================================
 echo ""
