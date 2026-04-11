@@ -203,15 +203,19 @@ echo -e "${C_SUCCESS}[✔]${RESET} Push complete"
 
 # Deploy
 echo -e "${C_INFO}[*]${RESET} Deploying to Cloud Run..."
-gcloud run deploy "$SERVICE_NAME" \
-    --image "$IMAGE" \
+gcloud builds submit --tag gcr.io/$PROJECT_ID/$SERVICE_NAME:latest . --quiet
+gcloud run deploy $SERVICE_NAME \
+    --image gcr.io/$PROJECT_ID/$SERVICE_NAME:latest \
     --platform managed \
-    --region "$REGION" \
+    --region $REGION \
     --allow-unauthenticated \
     --port 8080 \
-    --cpu "$CPU" \
-    --memory "$MEMORY" \
+    --cpu 2 \
+    --memory 4Gi \
     --timeout 3600 \
+    --min-instances 1 \
+    --no-cpu-throttling \
+    --session-affinity \
     --quiet
 
 SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)' 2>/dev/null)
