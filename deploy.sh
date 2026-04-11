@@ -278,7 +278,8 @@ echo -e "${C_HEADER}════════════════════
 echo ""
 
 # ==============================================
-#        INTERACTIVE OUTPUT SELECTION
+#        UNIFIED OUTPUT SELECTION BLOCK
+#        QR + APP DEEP LINKS + FILE SAVE
 # ==============================================
 echo ""
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
@@ -286,24 +287,27 @@ echo -e "${C_PLAIN}$(math_bold "OUTPUT OPTIONS")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 echo -e "  ${C_ACCENT}[1]${RESET} Show QR Code (scan with phone)"
-echo -e "  ${C_ACCENT}[2]${RESET} Generate Clickable Link (open in browser)"
+echo -e "  ${C_ACCENT}[2]${RESET} Generate Clickable Web Page"
 echo -e "  ${C_ACCENT}[3]${RESET} Display Full URI (copy manually)"
-echo -e "  ${C_ACCENT}[4]${RESET} Save to File (cat /tmp/vless-uri.txt)"
-echo -e "  ${C_ACCENT}[5]${RESET} All of the above"
-echo -e "  ${C_ACCENT}[6]${RESET} Exit"
+echo -e "  ${C_ACCENT}[4]${RESET} Save to File"
+echo -e "  ${C_ACCENT}[5]${RESET} ${BOLD}OPEN IN VPN APP (Auto-Import)${RESET}"
+echo -e "  ${C_ACCENT}[6]${RESET} All Options"
+echo -e "  ${C_ACCENT}[7]${RESET} Exit"
 echo ""
-read -p "$(echo -e "${C_INFO}[?]${RESET} Select output method [1-6]: ")" OUTPUT_CHOICE
+read -p "$(echo -e "${C_INFO}[?]${RESET} Select output method [1-7]: ")" OUTPUT_CHOICE
 
-# --- Function: Generate QR Code ---
-generate_qr() {
+# Encode VLESS URI for deep links
+VLESS_BASE64=$(echo -n "$VLESS_URI" | base64 -w 0 2>/dev/null || echo -n "$VLESS_URI" | base64)
+
+# --- Function: ASCII QR Code in Terminal ---
+generate_ascii_qr() {
     echo ""
     echo -e "${C_INFO}[*]${RESET} Generating QR code..."
     
-    # Install qrencode if not present
     if ! command -v qrencode &> /dev/null; then
         echo -e "${C_WARN}[!]${RESET} Installing qrencode (one-time)..."
         sudo apt-get update -qq && sudo apt-get install -y qrencode -qq 2>/dev/null || {
-            echo -e "${C_ERROR}[✘]${RESET} Could not install qrencode. Use option 3 for URI."
+            echo -e "${C_ERROR}[✘]${RESET} Could not install qrencode."
             return 1
         }
     fi
@@ -316,101 +320,191 @@ generate_qr() {
     echo -e "${C_SUCCESS}[✔]${RESET} QR code displayed above"
 }
 
-# --- Function: Generate Clickable Link ---
-generate_link() {
-    # Save to HTML file
-    cat > /tmp/vless-config.html <<EOF
+# --- Function: Generate Web Page with QR + Clickable Link ---
+generate_web_page() {
+    mkdir -p /tmp/vless-preview
+    cat > /tmp/vless-preview/index.html <<EOF
 <!DOCTYPE html>
 <html>
 <head>
     <title>VLESS Config - $SERVICE_NAME</title>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { font-family: monospace; padding: 20px; background: #1a1a2e; color: #eee; }
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #0d1117; color: #c9d1d9; text-align: center; }
+        .container { max-width: 600px; margin: 0 auto; }
         h2 { color: #00d4ff; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .field { background: #16213e; padding: 10px; margin: 10px 0; border-radius: 5px; }
-        .label { color: #00d4ff; font-weight: bold; }
-        textarea { width: 100%; padding: 10px; background: #0f3460; color: #fff; border: none; border-radius: 5px; font-family: monospace; }
-        button { background: #00d4ff; color: #1a1a2e; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; cursor: pointer; margin: 5px; }
-        button:hover { background: #00b4d8; }
-        .qr { text-align: center; margin: 20px 0; }
+        h3 { color: #8b949e; margin-top: 30px; }
+        .btn { display: inline-block; background: #00d4ff; color: #0d1117; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 16px; margin: 10px 5px; }
+        .btn:hover { background: #00b4d8; }
+        .qr-container { background: white; padding: 20px; display: inline-block; border-radius: 12px; margin: 20px 0; }
+        .info { background: #161b22; padding: 15px; border-radius: 8px; text-align: left; margin: 20px 0; word-break: break-all; }
+        .info code { background: #0d1117; padding: 2px 6px; border-radius: 4px; color: #00d4ff; }
+        .note { color: #8b949e; font-size: 14px; margin-top: 20px; }
+        .section { margin: 30px 0; }
+        hr { border: 1px solid #30363d; margin: 30px 0; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>🚀 VLESS Configuration - $SERVICE_NAME</h2>
-        <p><strong>Created by prvtspyyy</strong></p>
+        <h2>🚀 VLESS Configuration</h2>
+        <p><strong>Service:</strong> $SERVICE_NAME</p>
+        <p><strong>Address:</strong> $CLEAN_HOST</p>
+        <p><strong>Port:</strong> 443 | <strong>Path:</strong> $WS_PATH</p>
+        <p><strong>UUID:</strong> $UUID</p>
         
-        <div class="field">
-            <span class="label">Full URI:</span><br>
-            <textarea id="uri" rows="3" onclick="this.select()">$VLESS_URI</textarea>
-            <button onclick="copyURI()">Copy URI</button>
-        </div>
-        
-        <div class="field">
-            <span class="label">Address:</span> $CLEAN_HOST
-        </div>
-        <div class="field">
-            <span class="label">Port:</span> 443
-        </div>
-        <div class="field">
-            <span class="label">UUID:</span> $UUID
-        </div>
-        <div class="field">
-            <span class="label">Path:</span> $WS_PATH
-        </div>
-        <div class="field">
-            <span class="label">Transport:</span> ws
-        </div>
-        <div class="field">
-            <span class="label">TLS:</span> Enabled
+        <div class="qr-container">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=$(echo -n "$VLESS_URI" | jq -sRr @uri 2>/dev/null || echo -n "$VLESS_URI" | sed 's/ /%20/g')" alt="QR Code" width="250" height="250">
+            <p style="color: #0d1117; margin: 10px 0 0 0; font-weight: bold;">Scan with your phone</p>
         </div>
         
-        <div class="qr">
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=$(echo -n "$VLESS_URI" | jq -sRr @uri)" alt="QR Code">
-            <p>Scan with your phone</p>
+        <div class="info">
+            <p><strong>📋 Full URI (click to copy):</strong></p>
+            <code style="font-size: 12px;" onclick="navigator.clipboard.writeText('$VLESS_URI')">$VLESS_URI</code>
         </div>
+        
+        <hr>
+        
+        <h3>📱 Auto-Import to VPN Apps</h3>
+        <p>Click an app below to auto-import (must have app installed):</p>
+        
+        <a href="netmod://import?url=${VLESS_BASE64}" class="btn">NetMod Syna</a>
+        <a href="httpinjector://import?url=${VLESS_BASE64}" class="btn">HTTP Injector</a>
+        <a href="httpcustom://import?url=${VLESS_BASE64}" class="btn">HTTP Custom</a>
+        <a href="napsternetv://import?url=${VLESS_BASE64}" class="btn">NapsternetV</a>
+        <a href="v2rayng://install-config?url=data:text/plain;base64,${VLESS_BASE64}" class="btn">v2rayNG</a>
+        <a href="nekobox://import?v2ray=${VLESS_BASE64}" class="btn">Nekobox</a>
+        <a href="streisand://import/${VLESS_BASE64}" class="btn">Streisand</a>
+        <a href="hiddify://import/${VLESS_BASE64}" class="btn">Hiddify</a>
+        <a href="karing://import?v2ray=${VLESS_BASE64}" class="btn">Karing</a>
+        <a href="foxray://import?uri=${VLESS_BASE64}" class="btn">FoXray</a>
+        <a href="shadowrocket://add/sub?type=vless&name=${SERVICE_NAME}&server=${CLEAN_HOST}&port=443&uuid=${UUID}&path=%2F${WS_PATH#/}&tls=1&allowInsecure=0" class="btn">Shadowrocket</a>
+        
+        <p class="note">Created by prvtspyyy</p>
     </div>
-    
-    <script>
-        function copyURI() {
-            var textarea = document.getElementById('uri');
-            textarea.select();
-            navigator.clipboard.writeText(textarea.value);
-            alert('URI copied to clipboard!');
-        }
-    </script>
 </body>
 </html>
 EOF
 
-    echo ""
-    echo -e "${C_SUCCESS}[✔]${RESET} Configuration page created!"
-    echo -e "${C_INFO}[*]${RESET} Starting web server on port 8888..."
-    echo ""
-    
-    # Kill any existing server on port 8888
+    # Kill existing server on port 8888
     fuser -k 8888/tcp 2>/dev/null || true
     
-    # Start Python HTTP server in background
-    cd /tmp && python3 -m http.server 8888 --bind 0.0.0.0 > /dev/null 2>&1 &
+    # Start Python HTTP server
+    cd /tmp/vless-preview && python3 -m http.server 8888 --bind 0.0.0.0 > /dev/null 2>&1 &
     SERVER_PID=$!
     
-    # Generate Cloud Shell Web Preview URL
-    WEB_PREVIEW_URL="https://shell.cloud.google.com/devshell/proxy?port=8888"
-    
-    echo -e "${C_PLAIN}╔════════════════════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${C_PLAIN}║${RESET}  ${BOLD}${GREEN}CLICKABLE LINK READY${RESET}                                                 ${C_PLAIN}║${RESET}"
-    echo -e "${C_PLAIN}╠════════════════════════════════════════════════════════════════════════════╣${RESET}"
-    echo -e "${C_PLAIN}║${RESET}  ${CYAN}Open this URL in your browser:${RESET}                                        ${C_PLAIN}║${RESET}"
-    echo -e "${C_PLAIN}║${RESET}  ${BOLD}${WHITE}$WEB_PREVIEW_URL${RESET}${C_PLAIN}║${RESET}"
-    echo -e "${C_PLAIN}║${RESET}                                                                            ${C_PLAIN}║${RESET}"
-    echo -e "${C_PLAIN}║${RESET}  ${YELLOW}Press Ctrl+C here to stop the web server when done${RESET}                  ${C_PLAIN}║${RESET}"
-    echo -e "${C_PLAIN}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
     echo ""
-    echo -e "${C_WARN}[!]${RESET} Server running in background (PID: $SERVER_PID)"
-    echo -e "${C_INFO}[*]${RESET} To stop: ${BOLD}kill $SERVER_PID${RESET}"
+    echo -e "${C_SUCCESS}╔════════════════════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${C_SUCCESS}║${RESET}                    ${BOLD}${GREEN}WEB PAGE READY${RESET}                                      ${C_SUCCESS}║${RESET}"
+    echo -e "${C_SUCCESS}╠════════════════════════════════════════════════════════════════════════════╣${RESET}"
+    echo -e "${C_SUCCESS}║${RESET}  ${CYAN}1. Click Web Preview (eye icon) in Cloud Shell toolbar${RESET}             ${C_SUCCESS}║${RESET}"
+    echo -e "${C_SUCCESS}║${RESET}  ${CYAN}2. Select port 8888${RESET}                                                 ${C_SUCCESS}║${RESET}"
+    echo -e "${C_SUCCESS}║${RESET}  ${CYAN}3. Scan QR code OR click any VPN app button${RESET}                         ${C_SUCCESS}║${RESET}"
+    echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
+    echo -e "${C_SUCCESS}║${RESET}  ${YELLOW}Server PID: ${SERVER_PID}${RESET}                                             ${C_SUCCESS}║${RESET}"
+    echo -e "${C_SUCCESS}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
+    echo ""
+    
+    # Auto-cleanup after 10 minutes
+    (sleep 600 && kill $SERVER_PID 2>/dev/null && rm -rf /tmp/vless-preview) &
+}
+
+# --- Function: App Deep Link Selection (Individual Apps) ---
+app_deep_links() {
+    echo ""
+    echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+    echo -e "${C_PLAIN}$(math_bold "SELECT VPN APP TO AUTO-IMPORT")${RESET}"
+    echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+    echo ""
+    echo -e "  ${C_ACCENT}[1]${RESET} NetMod Syna"
+    echo -e "  ${C_ACCENT}[2]${RESET} HTTP Injector"
+    echo -e "  ${C_ACCENT}[3]${RESET} HTTP Custom"
+    echo -e "  ${C_ACCENT}[4]${RESET} NapsternetV"
+    echo -e "  ${C_ACCENT}[5]${RESET} v2rayNG"
+    echo -e "  ${C_ACCENT}[6]${RESET} Nekobox"
+    echo -e "  ${C_ACCENT}[7]${RESET} Streisand"
+    echo -e "  ${C_ACCENT}[8]${RESET} Hiddify"
+    echo -e "  ${C_ACCENT}[9]${RESET} Karing"
+    echo -e "  ${C_ACCENT}[10]${RESET} Shadowrocket (iOS)"
+    echo -e "  ${C_ACCENT}[11]${RESET} FoXray"
+    echo -e "  ${C_ACCENT}[12]${RESET} Back to main menu"
+    echo ""
+    read -p "$(echo -e "${C_INFO}[?]${RESET} Select app [1-12]: ")" APP_CHOICE
+    
+    case $APP_CHOICE in
+        1) DEEP_LINK="netmod://import?url=${VLESS_BASE64}"; APP_NAME="NetMod Syna" ;;
+        2) DEEP_LINK="httpinjector://import?url=${VLESS_BASE64}"; APP_NAME="HTTP Injector" ;;
+        3) DEEP_LINK="httpcustom://import?url=${VLESS_BASE64}"; APP_NAME="HTTP Custom" ;;
+        4) DEEP_LINK="napsternetv://import?url=${VLESS_BASE64}"; APP_NAME="NapsternetV" ;;
+        5) DEEP_LINK="v2rayng://install-config?url=data:text/plain;base64,${VLESS_BASE64}"; APP_NAME="v2rayNG" ;;
+        6) DEEP_LINK="nekobox://import?v2ray=${VLESS_BASE64}"; APP_NAME="Nekobox" ;;
+        7) DEEP_LINK="streisand://import/${VLESS_BASE64}"; APP_NAME="Streisand" ;;
+        8) DEEP_LINK="hiddify://import/${VLESS_BASE64}"; APP_NAME="Hiddify" ;;
+        9) DEEP_LINK="karing://import?v2ray=${VLESS_BASE64}"; APP_NAME="Karing" ;;
+        10) DEEP_LINK="shadowrocket://add/sub?type=vless&name=${SERVICE_NAME}&server=${CLEAN_HOST}&port=443&uuid=${UUID}&path=%2F${WS_PATH#/}&tls=1&allowInsecure=0"; APP_NAME="Shadowrocket" ;;
+        11) DEEP_LINK="foxray://import?uri=${VLESS_BASE64}"; APP_NAME="FoXray" ;;
+        12) return ;;
+        *) echo -e "${C_WARN}[!]${RESET} Invalid choice."; return ;;
+    esac
+    
+    # Create individual app preview page
+    mkdir -p /tmp/vless-preview
+    cat > /tmp/vless-preview/index.html <<EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <title>${APP_NAME} - VLESS Import</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #0d1117; color: #c9d1d9; text-align: center; }
+        .container { max-width: 500px; margin: 0 auto; }
+        h2 { color: #00d4ff; }
+        .btn { display: inline-block; background: #00d4ff; color: #0d1117; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 18px; margin: 20px 0; }
+        .qr-container { background: white; padding: 20px; display: inline-block; border-radius: 12px; margin: 20px 0; }
+        .info { background: #161b22; padding: 15px; border-radius: 8px; text-align: left; margin: 20px 0; word-break: break-all; }
+        .note { color: #8b949e; font-size: 14px; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🚀 ${APP_NAME} Auto-Import</h2>
+        <p>Click the button below to automatically import your VLESS configuration.</p>
+        
+        <a href="${DEEP_LINK}" class="btn">🔥 OPEN IN ${APP_NAME}</a>
+        
+        <div class="qr-container">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=$(echo -n "${DEEP_LINK}" | jq -sRr @uri 2>/dev/null || echo -n "${DEEP_LINK}")" alt="QR Code" width="200" height="200">
+            <p style="color: #0d1117; margin: 10px 0 0 0;">Scan with your phone</p>
+        </div>
+        
+        <div class="info">
+            <p><strong>📋 Manual Copy:</strong></p>
+            <code style="font-size: 12px;">${DEEP_LINK}</code>
+        </div>
+        
+        <p class="note">Make sure ${APP_NAME} is installed.<br>Created by prvtspyyy</p>
+    </div>
+</body>
+</html>
+EOF
+
+    fuser -k 8888/tcp 2>/dev/null || true
+    cd /tmp/vless-preview && python3 -m http.server 8888 --bind 0.0.0.0 > /dev/null 2>&1 &
+    SERVER_PID=$!
+    
+    echo ""
+    echo -e "${C_SUCCESS}╔════════════════════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${C_SUCCESS}║${RESET}                    ${BOLD}${GREEN}${APP_NAME} IMPORT READY${RESET}                              ${C_SUCCESS}║${RESET}"
+    echo -e "${C_SUCCESS}╠════════════════════════════════════════════════════════════════════════════╣${RESET}"
+    echo -e "${C_SUCCESS}║${RESET}  ${CYAN}1. Click Web Preview (eye icon) → port 8888${RESET}                        ${C_SUCCESS}║${RESET}"
+    echo -e "${C_SUCCESS}║${RESET}  ${CYAN}2. Click OPEN IN ${APP_NAME} or scan QR code${RESET}                        ${C_SUCCESS}║${RESET}"
+    echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
+    echo -e "${C_SUCCESS}║${RESET}  ${YELLOW}Server PID: ${SERVER_PID}${RESET}                                             ${C_SUCCESS}║${RESET}"
+    echo -e "${C_SUCCESS}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
+    echo ""
+    
+    (sleep 600 && kill $SERVER_PID 2>/dev/null && rm -rf /tmp/vless-preview) &
 }
 
 # --- Function: Display Full URI ---
@@ -448,10 +542,10 @@ save_to_file() {
 # --- Process User Choice ---
 case $OUTPUT_CHOICE in
     1)
-        generate_qr
+        generate_ascii_qr
         ;;
     2)
-        generate_link
+        generate_web_page
         ;;
     3)
         display_uri
@@ -460,12 +554,15 @@ case $OUTPUT_CHOICE in
         save_to_file
         ;;
     5)
-        generate_qr
-        generate_link
+        app_deep_links
+        ;;
+    6)
+        generate_ascii_qr
+        generate_web_page
         display_uri
         save_to_file
         ;;
-    6)
+    7)
         echo -e "${C_INFO}[*]${RESET} Exiting..."
         ;;
     *)
@@ -476,6 +573,7 @@ esac
 
 # Always save to file as backup
 echo "$VLESS_URI" > /tmp/vless-uri.txt
+
 echo ""
 echo -e "${C_SUCCESS}╔════════════════════════════════════════════════════════════════════════════╗${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${BOLD}${WHITE}$(math_bold "DEPLOYMENT COMPLETE")${RESET}                                            ${C_SUCCESS}║${RESET}"
