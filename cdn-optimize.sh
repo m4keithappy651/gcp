@@ -37,7 +37,7 @@ gcloud run services update "$SERVICE_NAME" \
     --max-instances 1 \
     --concurrency 80 \
     --cpu 2 \
-    --memory 4Gi \
+    --memory 2Gi \
     --timeout 3600 \
     --no-cpu-throttling \
     --session-affinity \
