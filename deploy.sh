@@ -117,36 +117,42 @@ echo -e "${C_SUCCESS}[✔]${RESET} Project: ${BOLD}${PROJECT_ID}${RESET}"
 echo ""
 
 # ==============================================
-#        AUTOMATIC REGION SELECTION (QWIKLABS SAFE)
+# ==============================================
+#    QUOTA-AWARE RANDOM REGION SELECTOR
 # ==============================================
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "AUTOMATIC REGION SELECTION")${RESET}"
+echo -e "${C_PLAIN}$(math_bold "QUOTA-AWARE RANDOM REGION SELECTION")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
-PRIORITY_REGIONS=("us-central1" "us-east1" "us-west1")
-SELECTED_REGION=""
+# Candidate regions (ordered by Qwiklabs reliability)
+CANDIDATE_REGIONS=("us-central1" "us-east1" "us-west1" "us-west2" "us-west4" "europe-west1" "asia-east1" "asia-southeast1")
+AVAILABLE_REGIONS=()
 
-echo -e "${C_INFO}[*]${RESET} Probing for available Qwiklabs region..."
+echo -e "${C_INFO}[*]${RESET} Probing regions for quota availability..."
 
-for reg in "${PRIORITY_REGIONS[@]}"; do
+for reg in "${CANDIDATE_REGIONS[@]}"; do
     echo -e "  ${C_INFO}[→]${RESET} Testing ${reg}..."
-    if gcloud run services list --region="$reg" --limit=1 &>/dev/null; then
-        SELECTED_REGION="$reg"
-        echo -e "  ${C_SUCCESS}[✔]${RESET} ${reg} is active and selected"
-        break
+    # A successful service list confirms: 1) API is enabled, 2) Region is not policy-blocked, 3) Quota is not exhausted.
+    if gcloud run services list --region="$reg" --limit=1 --format="value(name)" &>/dev/null; then
+        AVAILABLE_REGIONS+=("$reg")
+        echo -e "  ${C_SUCCESS}[✔]${RESET} ${reg} is available (quota OK)"
     else
-        echo -e "  ${C_WARN}[✘]${RESET} ${reg} is blocked or unavailable"
+        echo -e "  ${C_WARN}[✘]${RESET} ${reg} is blocked or quota exhausted"
     fi
+    # Small delay to avoid rate limiting the probe itself
+    sleep 0.3
 done
 
-if [ -z "$SELECTED_REGION" ]; then
-    echo -e "${C_WARN}[!]${RESET} No priority regions available. Forcing us-central1..."
-    SELECTED_REGION="us-central1"
+# Select random region from available pool
+if [ ${#AVAILABLE_REGIONS[@]} -eq 0 ]; then
+    echo -e "${C_ERROR}[✘]${RESET} No regions available! Forcing us-central1 as last resort..."
+    REGION="us-central1"
+else
+    RANDOM_INDEX=$((RANDOM % ${#AVAILABLE_REGIONS[@]}))
+    REGION="${AVAILABLE_REGIONS[$RANDOM_INDEX]}"
+    echo -e "${C_SUCCESS}[✔]${RESET} Randomly selected from ${#AVAILABLE_REGIONS[@]} available region(s): ${BOLD}${WHITE}${REGION}${RESET}"
 fi
 
-REGION="$SELECTED_REGION"
-echo ""
-echo -e "${C_SUCCESS}[✔]${RESET} Selected region: ${BOLD}${WHITE}${REGION}${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
@@ -215,8 +221,8 @@ gcloud run deploy "$SERVICE_NAME" \
     --memory 4Gi \
     --concurrency 80 \
     --timeout 3600 \
-    --min-instances 1 \
-    --max-instances 2 \
+    --min-instances 0 \
+    --max-instances 1 \
     --no-cpu-throttling \
     --session-affinity \
     --quiet
