@@ -198,38 +198,38 @@ echo -e "${C_SUCCESS}[✔]${RESET} CPU: ${BOLD}${CPU}${RESET}, Memory: ${BOLD}${
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
-# --- Build Parameters ---
-UUID=$(grep -o '"id": "[^"]*' config.json | cut -d'"' -f4)
-WS_PATH=$(grep -o '"path": "[^"]*' config.json | cut -d'"' -f4)
+# ==============================================
+#        LOCAL DOCKER BUILD (BYPASSES CLOUD BUILD QUOTA)
+# ==============================================
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo -e "${C_PLAIN}$(math_bold "BUILDING LOCALLY (QUOTA-FREE)")${RESET}"
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+
 IMAGE="gcr.io/$PROJECT_ID/$SERVICE_NAME:latest"
 
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "BUILDING AND DEPLOYING")${RESET}"
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-
-# Build
-echo -e "${C_INFO}[*]${RESET} Building Docker image..."
+# 1. Build the image using the local Docker daemon
+echo -e "${C_INFO}[*]${RESET} Building container image locally (this may take a moment)..."
 docker build -t "$IMAGE" . --quiet
-echo -e "${C_SUCCESS}[✔]${RESET} Build complete"
+echo -e "${C_SUCCESS}[✔]${RESET} Local build complete"
 
-# Push
-echo -e "${C_INFO}[*]${RESET} Pushing to Container Registry..."
+# 2. Push the image to Google Container Registry
+echo -e "${C_INFO}[*]${RESET} Pushing image to Container Registry..."
 docker push "$IMAGE" --quiet
 echo -e "${C_SUCCESS}[✔]${RESET} Push complete"
 
-# --- Deploy to Cloud Run ---
-echo -e "${C_INFO}[*]${RESET} Deploying to Cloud Run..."
+# 3. Deploy to Cloud Run (using minimal resources to stay within Qwiklabs limits)
+echo -e "${C_INFO}[*]${RESET} Deploying to Cloud Run in ${REGION}..."
 gcloud run deploy "$SERVICE_NAME" \
     --image "$IMAGE" \
     --platform managed \
     --region "$REGION" \
     --allow-unauthenticated \
     --port 8080 \
-    --cpu 2 \
-    --memory 4Gi \
+    --cpu 1 \
+    --memory 1Gi \
     --concurrency 80 \
     --timeout 3600 \
-    --min-instances 0 \
+    --min-instances 1 \
     --max-instances 1 \
     --no-cpu-throttling \
     --session-affinity \
@@ -237,6 +237,7 @@ gcloud run deploy "$SERVICE_NAME" \
 
 SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)' 2>/dev/null)
 CLEAN_HOST=$(echo "$SERVICE_URL" | sed 's|https://||')
+echo -e "${C_SUCCESS}[✔]${RESET} Deployment complete"
 
 # --- Generate VLESS URI with Custom Address and SNI ---
 VLESS_URI="vless://${UUID}@client2.google.com:443?encryption=none&security=tls&type=ws&path=%2F${WS_PATH#/}&host=${CLEAN_HOST}&sni=firebase-settings.crashlytics.com&fp=chrome#${SERVICE_NAME}"
