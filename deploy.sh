@@ -117,15 +117,38 @@ echo -e "${C_SUCCESS}[✔]${RESET} Project: ${BOLD}${PROJECT_ID}${RESET}"
 echo ""
 
 # ==============================================
-#        REGION & SERVICE CONFIGURATION (AUTO US-CENTRAL1)
+#        AUTOMATIC REGION SELECTION (QWIKLABS SAFE)
 # ==============================================
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "REGION & SERVICE CONFIGURATION")${RESET}"
+echo -e "${C_PLAIN}$(math_bold "AUTOMATIC REGION SELECTION")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
-# Automatic region selection (hardcoded to us-central1 for Qwiklabs reliability)
-REGION="us-central1"
-echo -e "${C_SUCCESS}[✔]${RESET} Region: ${BOLD}${REGION}${RESET} (auto-selected for Qwiklabs)"
+PRIORITY_REGIONS=("us-central1" "us-east1" "us-west1")
+SELECTED_REGION=""
+
+echo -e "${C_INFO}[*]${RESET} Probing for available Qwiklabs region..."
+
+for reg in "${PRIORITY_REGIONS[@]}"; do
+    echo -e "  ${C_INFO}[→]${RESET} Testing ${reg}..."
+    if gcloud run services list --region="$reg" --limit=1 &>/dev/null; then
+        SELECTED_REGION="$reg"
+        echo -e "  ${C_SUCCESS}[✔]${RESET} ${reg} is active and selected"
+        break
+    else
+        echo -e "  ${C_WARN}[✘]${RESET} ${reg} is blocked or unavailable"
+    fi
+done
+
+if [ -z "$SELECTED_REGION" ]; then
+    echo -e "${C_WARN}[!]${RESET} No priority regions available. Forcing us-central1..."
+    SELECTED_REGION="us-central1"
+fi
+
+REGION="$SELECTED_REGION"
+echo ""
+echo -e "${C_SUCCESS}[✔]${RESET} Selected region: ${BOLD}${WHITE}${REGION}${RESET}"
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo ""
 
 # Customizable service name
 DEFAULT_SERVICE_NAME="prvtspyyy404"
