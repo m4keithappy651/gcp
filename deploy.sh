@@ -116,40 +116,19 @@ fi
 echo -e "${C_SUCCESS}[✔]${RESET} Project: ${BOLD}${PROJECT_ID}${RESET}"
 echo ""
 
-# --- Region Selection (Qwiklabs Optimized) ---
+# ==============================================
+#        REGION & SERVICE CONFIGURATION (AUTO US-CENTRAL1)
+# ==============================================
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "REGION SELECTION")${RESET}"
+echo -e "${C_PLAIN}$(math_bold "REGION & SERVICE CONFIGURATION")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
-REGIONS=("us-central1" "us-east1" "us-west1" "europe-west1" "asia-east1" "asia-southeast1")
-AVAILABLE_REGIONS=()
+# Automatic region selection (hardcoded to us-central1 for Qwiklabs reliability)
+REGION="us-central1"
+echo -e "${C_SUCCESS}[✔]${RESET} Region: ${BOLD}${REGION}${RESET} (auto-selected for Qwiklabs)"
 
-echo -e "${C_INFO}[*]${RESET} Probing regions for deployability..."
-for reg in "${REGIONS[@]}"; do
-    if gcloud run services list --region="$reg" --limit=1 &>/dev/null; then
-        AVAILABLE_REGIONS+=("$reg")
-        echo -e "  ${C_ACCENT}[✓]${RESET} ${BOLD}${reg}${RESET} ${GREEN}ACTIVE${RESET}"
-    else
-        echo -e "  ${RED}[✗]${RESET} ${BOLD}${reg}${RESET} ${RED}BLOCKED${RESET}"
-    fi
-    sleep 0.2
-done
-
-if [ ${#AVAILABLE_REGIONS[@]} -eq 0 ]; then
-    echo -e "${C_WARN}[!]${RESET} No active regions. Using us-central1 as fallback."
-    REGION="us-central1"
-else
-    REGION="${AVAILABLE_REGIONS[0]}"
-    echo -e "${C_SUCCESS}[✔]${RESET} Auto-selected: ${BOLD}${REGION}${RESET}"
-fi
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo ""
-
-# --- Service Name Customization ---
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "SERVICE CONFIGURATION")${RESET}"
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-DEFAULT_SERVICE_NAME="prvtspyyy-vless"
+# Customizable service name
+DEFAULT_SERVICE_NAME="prvtspyyy404"
 read -p "$(echo -e "${C_INFO}[?]${RESET} Enter service name [default: ${DEFAULT_SERVICE_NAME}]: ")" SERVICE_NAME_INPUT
 SERVICE_NAME="${SERVICE_NAME_INPUT:-$DEFAULT_SERVICE_NAME}"
 SERVICE_NAME=$(echo "$SERVICE_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
