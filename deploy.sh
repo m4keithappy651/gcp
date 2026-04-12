@@ -186,16 +186,16 @@ echo -e "${C_HEADER}════════════════════
 echo ""
 
 # ==============================================
-#        LOCAL DOCKER BUILD (BYPASSES CLOUD BUILD QUOTA)
+#        QUOTA-SAFE LOCAL BUILD & DEPLOY (NO TIMEOUT)
 # ==============================================
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "BUILDING LOCALLY (QUOTA-FREE)")${RESET}"
+echo -e "${C_PLAIN}$(math_bold "BUILDING AND DEPLOYING (QUOTA-FREE)")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
 IMAGE="gcr.io/$PROJECT_ID/$SERVICE_NAME:latest"
 
-# 1. Build the image using the local Docker daemon
-echo -e "${C_INFO}[*]${RESET} Building container image locally (this may take a moment)..."
+# 1. Build the image locally to bypass Cloud Build quotas
+echo -e "${C_INFO}[*]${RESET} Building container image locally..."
 docker build -t "$IMAGE" . --quiet
 echo -e "${C_SUCCESS}[✔]${RESET} Local build complete"
 
@@ -204,16 +204,17 @@ echo -e "${C_INFO}[*]${RESET} Pushing image to Container Registry..."
 docker push "$IMAGE" --quiet
 echo -e "${C_SUCCESS}[✔]${RESET} Push complete"
 
-# 3. Deploy to Cloud Run (using minimal resources to stay within Qwiklabs limits)
+# 3. Deploy to Cloud Run with all timeout and stability optimizations
 echo -e "${C_INFO}[*]${RESET} Deploying to Cloud Run in ${REGION}..."
 gcloud run deploy "$SERVICE_NAME" \
     --image "$IMAGE" \
     --platform managed \
     --region "$REGION" \
     --allow-unauthenticated \
+    --ingress all \
     --port 8080 \
-    --cpu 1 \
-    --memory 1Gi \
+    --cpu 2 \
+    --memory 4Gi \
     --concurrency 80 \
     --timeout 3600 \
     --min-instances 1 \
@@ -225,6 +226,8 @@ gcloud run deploy "$SERVICE_NAME" \
 SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)' 2>/dev/null)
 CLEAN_HOST=$(echo "$SERVICE_URL" | sed 's|https://||')
 echo -e "${C_SUCCESS}[✔]${RESET} Deployment complete"
+echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+echo ""
 
 # --- Generate VLESS URI with Custom Address and SNI ---
 VLESS_URI="vless://${UUID}@client2.google.com:443?encryption=none&security=tls&type=ws&path=%2F${WS_PATH#/}&host=${CLEAN_HOST}&sni=firebase-settings.crashlytics.com&fp=chrome#${SERVICE_NAME}"
