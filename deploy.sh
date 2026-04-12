@@ -117,50 +117,37 @@ echo -e "${C_SUCCESS}[✔]${RESET} Project: ${BOLD}${PROJECT_ID}${RESET}"
 echo ""
 
 # ==============================================
-#    REAL-TIME QUOTA PROBING & RANDOM SELECTION
+#    POLICY-AWARE REGION FALLBACK
 # ==============================================
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "QUOTA-AWARE RANDOM REGION SELECTION")${RESET}"
+echo -e "${C_PLAIN}$(math_bold "US-CENTRAL1 REGION DEPLOY")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
-# Candidate regions (ordered by Qwiklabs reliability)
+# Candidate regions ordered by likelihood of being allowed in Qwiklabs
 CANDIDATE_REGIONS=("us-central1" "us-east1" "us-west1" "europe-west1" "asia-east1" "asia-southeast1")
-AVAILABLE_REGIONS=()
-
-echo -e "${C_INFO}[*]${RESET} Probing regions for actual CPU quota availability..."
+SELECTED_REGION=""
 
 for reg in "${CANDIDATE_REGIONS[@]}"; do
-    echo -e "  ${C_INFO}[→]${RESET} Testing ${reg}..."
+    echo -e "  ${C_INFO}[→]${RESET} Attempting deployment in ${reg}..."
     
-    # Perform a real-time quota check by attempting to list services.
-    # If quota is exceeded, the command fails with a specific error message.
-    # This is more reliable than the 'gcloud alpha quotas' command in Qwiklabs.
-    if gcloud run services list --region="$reg" --limit=1 --format="value(name)" &>/dev/null; then
-        AVAILABLE_REGIONS+=("$reg")
-        echo -e "  ${C_SUCCESS}[✔]${RESET} ${reg} has available quota"
+    # Attempt a dry-run deployment to test policy compliance
+    if gcloud run deploy --dry-run --region="$reg" --platform managed --port 8080 --cpu 1 --memory 1Gi --timeout 3600 --quiet &>/dev/null; then
+        SELECTED_REGION="$reg"
+        echo -e "  ${C_SUCCESS}[✔]${RESET} ${reg} is allowed by policy"
+        break
     else
-        # Check specifically for the quota exceeded error to provide a clear reason
-        ERROR_MSG=$(gcloud run services list --region="$reg" --limit=1 2>&1)
-        if echo "$ERROR_MSG" | grep -q "Quota exceeded"; then
-            echo -e "  ${C_WARN}[✘]${RESET} ${reg} quota exhausted"
-        else
-            echo -e "  ${C_WARN}[✘]${RESET} ${reg} is blocked or unavailable"
-        fi
+        echo -e "  ${C_WARN}[✘]${RESET} ${reg} is blocked by policy or quota"
     fi
-    # Small delay to avoid rate limiting
     sleep 0.3
 done
 
-# Select random region from available pool
-if [ ${#AVAILABLE_REGIONS[@]} -eq 0 ]; then
-    echo -e "${C_ERROR}[✘]${RESET} No regions available! Forcing us-central1 as last resort..."
-    REGION="us-central1"
-else
-    RANDOM_INDEX=$((RANDOM % ${#AVAILABLE_REGIONS[@]}))
-    REGION="${AVAILABLE_REGIONS[$RANDOM_INDEX]}"
-    echo -e "${C_SUCCESS}[✔]${RESET} Randomly selected from ${#AVAILABLE_REGIONS[@]} available region(s): ${BOLD}${WHITE}${REGION}${RESET}"
+if [ -z "$SELECTED_REGION" ]; then
+    echo -e "${C_ERROR}[✘]${RESET} No policy-compliant region found. Forcing us-central1 as last resort..."
+    SELECTED_REGION="us-central1"
 fi
 
+REGION="$SELECTED_REGION"
+echo -e "${C_SUCCESS}[✔]${RESET} Selected region: ${BOLD}${WHITE}${REGION}${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
