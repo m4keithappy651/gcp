@@ -117,35 +117,60 @@ echo -e "${C_SUCCESS}[✔]${RESET} Project: ${BOLD}${PROJECT_ID}${RESET}"
 echo ""
 
 # ==============================================
-# ==============================================
-#    QUOTA-AWARE RANDOM REGION SELECTOR
+#    REAL-TIME QUOTA-AWARE REGION SELECTION
 # ==============================================
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "QUOTA-AWARE RANDOM REGION SELECTION")${RESET}"
+echo -e "${C_PLAIN}$(math_bold "REAL-TIME QUOTA DETECTION")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
 # Candidate regions (ordered by Qwiklabs reliability)
 CANDIDATE_REGIONS=("us-central1" "us-east1" "us-west1" "us-west2" "us-west4" "europe-west1" "asia-east1" "asia-southeast1")
 AVAILABLE_REGIONS=()
 
-echo -e "${C_INFO}[*]${RESET} Probing regions for quota availability..."
+# The specific Cloud Run CPU quota ID
+QUOTA_ID="cloud-run-cpu-quota" # This may need adjustment based on gcloud version
+
+echo -e "${C_INFO}[*]${RESET} Probing regions for actual CPU quota availability..."
 
 for reg in "${CANDIDATE_REGIONS[@]}"; do
-    echo -e "  ${C_INFO}[→]${RESET} Testing ${reg}..."
-    # A successful service list confirms: 1) API is enabled, 2) Region is not policy-blocked, 3) Quota is not exhausted.
-    if gcloud run services list --region="$reg" --limit=1 --format="value(name)" &>/dev/null; then
-        AVAILABLE_REGIONS+=("$reg")
-        echo -e "  ${C_SUCCESS}[✔]${RESET} ${reg} is available (quota OK)"
-    else
-        echo -e "  ${C_WARN}[✘]${RESET} ${reg} is blocked or quota exhausted"
+    echo -e "  ${C_INFO}[→]${RESET} Checking quota in ${reg}..."
+    
+    # First, check if the region is not policy-blocked (quick check)
+    if ! gcloud run regions list --format="value(name)" 2>/dev/null | grep -qx "$reg"; then
+        echo -e "  ${C_WARN}[✘]${RESET} ${reg} is not a Cloud Run region or is policy-blocked"
+        continue
     fi
-    # Small delay to avoid rate limiting the probe itself
+
+    # Second, perform a real-time quota check
+    # This command fetches the limit and usage for the Cloud Run CPU quota in the specified region
+    QUOTA_INFO=$(gcloud alpha quotas describe --service="run.googleapis.com" --consumer="projects/${PROJECT_ID}" --location="regions/${reg}" "${QUOTA_ID}" --format="value(limit,usage)" 2>/dev/null)
+    
+    if [ -n "$QUOTA_INFO" ]; then
+        LIMIT=$(echo "$QUOTA_INFO" | awk '{print $1}')
+        USAGE=$(echo "$QUOTA_INFO" | awk '{print $2}')
+        
+        if [ "$USAGE" -lt "$LIMIT" ]; then
+            AVAILABLE_REGIONS+=("$reg")
+            echo -e "  ${C_SUCCESS}[✔]${RESET} ${reg} has available CPU quota (${USAGE}/${LIMIT})"
+        else
+            echo -e "  ${C_WARN}[✘]${RESET} ${reg} quota exhausted (${USAGE}/${LIMIT})"
+        fi
+    else
+        # If the alpha command fails, fall back to a basic service listing (less reliable)
+        echo -e "  ${C_WARN}[!]${RESET} Could not fetch quota for ${reg}. Using basic availability check..."
+        if gcloud run services list --region="$reg" --limit=1 --format="value(name)" &>/dev/null; then
+            AVAILABLE_REGIONS+=("$reg")
+            echo -e "  ${C_SUCCESS}[✔]${RESET} ${reg} appears available (basic check)"
+        else
+            echo -e "  ${C_WARN}[✘]${RESET} ${reg} is unavailable"
+        fi
+    fi
     sleep 0.3
 done
 
 # Select random region from available pool
 if [ ${#AVAILABLE_REGIONS[@]} -eq 0 ]; then
-    echo -e "${C_ERROR}[✘]${RESET} No regions available! Forcing us-central1 as last resort..."
+    echo -e "${C_ERROR}[✘]${RESET} No regions with available quota! Forcing us-central1 as last resort..."
     REGION="us-central1"
 else
     RANDOM_INDEX=$((RANDOM % ${#AVAILABLE_REGIONS[@]}))
