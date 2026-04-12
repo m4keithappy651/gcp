@@ -1,26 +1,17 @@
-FROM caddy:2-alpine AS caddy
 FROM teddysun/xray:latest
 
-# Copy Caddy binary from the official image
-COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
+# Install socat for a lightweight shell-based health check
+RUN apk update && apk add --no-cache socat && rm -rf /var/cache/apk/*
 
-# Copy Xray configuration (listening on internal port 8081)
+# Copy Xray configuration
 COPY config.json /etc/xray/config.json
 
-# Create Caddyfile to route traffic
-# - /health -> responds with 200 OK
-# - /prvtspyyy -> proxies WebSocket to Xray on localhost:8081
-RUN echo ':8080 {' > /etc/caddy/Caddyfile && \
-    echo '    respond /health 200' >> /etc/caddy/Caddyfile && \
-    echo '    handle_path /prvtspyyy {' >> /etc/caddy/Caddyfile && \
-    echo '        reverse_proxy localhost:8081' >> /etc/caddy/Caddyfile && \
-    echo '    }' >> /etc/caddy/Caddyfile && \
-    echo '}' >> /etc/caddy/Caddyfile
-
-# Create entrypoint script to start both Xray and Caddy
+# Create entrypoint script
 RUN echo '#!/bin/sh' > /entrypoint.sh && \
-    echo '/usr/bin/xray run -c /etc/xray/config.json &' >> /entrypoint.sh && \
-    echo 'exec /usr/bin/caddy run --config /etc/caddy/Caddyfile' >> /entrypoint.sh && \
+    echo '# Start a simple health check responder on port 8080' >> /entrypoint.sh && \
+    echo 'while true; do echo -e "HTTP/1.1 200 OK\r\n\r\nOK" | socat TCP-LISTEN:8080,fork,reuseaddr -; done &' >> /entrypoint.sh && \
+    echo '# Start Xray as the main foreground process' >> /entrypoint.sh && \
+    echo 'exec /usr/bin/xray run -c /etc/xray/config.json' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
 
 EXPOSE 8080
