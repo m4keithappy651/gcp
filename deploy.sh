@@ -117,60 +117,43 @@ echo -e "${C_SUCCESS}[✔]${RESET} Project: ${BOLD}${PROJECT_ID}${RESET}"
 echo ""
 
 # ==============================================
-#    REAL-TIME QUOTA-AWARE REGION SELECTION
+#    REAL-TIME QUOTA PROBING & RANDOM SELECTION
 # ==============================================
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "REAL-TIME QUOTA DETECTION")${RESET}"
+echo -e "${C_PLAIN}$(math_bold "QUOTA-AWARE RANDOM REGION SELECTION")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
 # Candidate regions (ordered by Qwiklabs reliability)
-CANDIDATE_REGIONS=("us-central1" "us-east1" "us-west1" "us-west2" "us-west4" "europe-west1" "asia-east1" "asia-southeast1")
+CANDIDATE_REGIONS=("us-central1" "us-east1" "us-west1" "europe-west1" "asia-east1" "asia-southeast1")
 AVAILABLE_REGIONS=()
-
-# The specific Cloud Run CPU quota ID
-QUOTA_ID="cloud-run-cpu-quota" # This may need adjustment based on gcloud version
 
 echo -e "${C_INFO}[*]${RESET} Probing regions for actual CPU quota availability..."
 
 for reg in "${CANDIDATE_REGIONS[@]}"; do
-    echo -e "  ${C_INFO}[→]${RESET} Checking quota in ${reg}..."
+    echo -e "  ${C_INFO}[→]${RESET} Testing ${reg}..."
     
-    # First, check if the region is not policy-blocked (quick check)
-    if ! gcloud run regions list --format="value(name)" 2>/dev/null | grep -qx "$reg"; then
-        echo -e "  ${C_WARN}[✘]${RESET} ${reg} is not a Cloud Run region or is policy-blocked"
-        continue
-    fi
-
-    # Second, perform a real-time quota check
-    # This command fetches the limit and usage for the Cloud Run CPU quota in the specified region
-    QUOTA_INFO=$(gcloud alpha quotas describe --service="run.googleapis.com" --consumer="projects/${PROJECT_ID}" --location="regions/${reg}" "${QUOTA_ID}" --format="value(limit,usage)" 2>/dev/null)
-    
-    if [ -n "$QUOTA_INFO" ]; then
-        LIMIT=$(echo "$QUOTA_INFO" | awk '{print $1}')
-        USAGE=$(echo "$QUOTA_INFO" | awk '{print $2}')
-        
-        if [ "$USAGE" -lt "$LIMIT" ]; then
-            AVAILABLE_REGIONS+=("$reg")
-            echo -e "  ${C_SUCCESS}[✔]${RESET} ${reg} has available CPU quota (${USAGE}/${LIMIT})"
-        else
-            echo -e "  ${C_WARN}[✘]${RESET} ${reg} quota exhausted (${USAGE}/${LIMIT})"
-        fi
+    # Perform a real-time quota check by attempting to list services.
+    # If quota is exceeded, the command fails with a specific error message.
+    # This is more reliable than the 'gcloud alpha quotas' command in Qwiklabs.
+    if gcloud run services list --region="$reg" --limit=1 --format="value(name)" &>/dev/null; then
+        AVAILABLE_REGIONS+=("$reg")
+        echo -e "  ${C_SUCCESS}[✔]${RESET} ${reg} has available quota"
     else
-        # If the alpha command fails, fall back to a basic service listing (less reliable)
-        echo -e "  ${C_WARN}[!]${RESET} Could not fetch quota for ${reg}. Using basic availability check..."
-        if gcloud run services list --region="$reg" --limit=1 --format="value(name)" &>/dev/null; then
-            AVAILABLE_REGIONS+=("$reg")
-            echo -e "  ${C_SUCCESS}[✔]${RESET} ${reg} appears available (basic check)"
+        # Check specifically for the quota exceeded error to provide a clear reason
+        ERROR_MSG=$(gcloud run services list --region="$reg" --limit=1 2>&1)
+        if echo "$ERROR_MSG" | grep -q "Quota exceeded"; then
+            echo -e "  ${C_WARN}[✘]${RESET} ${reg} quota exhausted"
         else
-            echo -e "  ${C_WARN}[✘]${RESET} ${reg} is unavailable"
+            echo -e "  ${C_WARN}[✘]${RESET} ${reg} is blocked or unavailable"
         fi
     fi
+    # Small delay to avoid rate limiting
     sleep 0.3
 done
 
 # Select random region from available pool
 if [ ${#AVAILABLE_REGIONS[@]} -eq 0 ]; then
-    echo -e "${C_ERROR}[✘]${RESET} No regions with available quota! Forcing us-central1 as last resort..."
+    echo -e "${C_ERROR}[✘]${RESET} No regions available! Forcing us-central1 as last resort..."
     REGION="us-central1"
 else
     RANDOM_INDEX=$((RANDOM % ${#AVAILABLE_REGIONS[@]}))
