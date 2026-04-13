@@ -7,39 +7,15 @@
       "protocol": "vless",
       "settings": {
         "clients": [ { "id": "9e507b33-65b6-40a4-b37f-eabad158b645" } ],
-        "decryption": "none",
-        "fallbacks": [
-          { "dest": 8081, "xver": 0 }
-        ]
+        "decryption": "none"
       },
       "streamSettings": {
-        "network": "tcp",
+        "network": "ws",
         "security": "none",
-        "tcpSettings": { "header": { "type": "none" } }
+        "wsSettings": { "path": "/prvtspyyy" },
+        "sockopt": { "tcpFastOpen": true }
       },
       "sniffing": { "enabled": true, "destOverride": ["http", "tls"] }
-    },
-    {
-      "listen": "127.0.0.1",
-      "port": 8081,
-      "protocol": "freedom",
-      "settings": {},
-      "streamSettings": {
-        "network": "tcp",
-        "security": "none",
-        "tcpSettings": {
-          "header": {
-            "type": "http",
-            "response": {
-              "version": "1.1",
-              "status": "200",
-              "reason": "OK",
-              "headers": { "Content-Type": ["text/plain"] },
-              "body": "Prvtspy404"
-            }
-          }
-        }
-      }
     }
   ],
   "outbounds": [
