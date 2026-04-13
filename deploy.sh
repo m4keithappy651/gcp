@@ -359,9 +359,7 @@ OPTIMIZER_EOF
     else
         echo -e "${C_ERROR}[✘]${RESET} Failed to start optimizer."
     fi
-    
-echo ""
-
+}
 
 # ==============================================
 #        AUTOMATIC NETWORK MONITOR (BACKGROUND)
