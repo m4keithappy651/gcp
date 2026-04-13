@@ -286,9 +286,8 @@ else
 fi
 
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
+gcloud run services describe "$SERVICE_URL" | sed 's|https://||' --region "$REGION" --format='value(status.url)'
 echo ""
-
-gcloud run services describe "$SERVICE_URL" | sed 's|https://||') --region "$REGION" --format='value(status.url)'
 
 # ==============================================
 #        OUTPUT SELECTION (QR CODE + PING MONITOR)
