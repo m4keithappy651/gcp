@@ -288,6 +288,8 @@ fi
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
+gcloud run services describe $SERVICE_NAME --region asia-southeast1 --format='value(status.url)' | sed 's|https://||'
+
 # ==============================================
 #        INTERACTIVE OUTPUT SELECTION
 # ==============================================
