@@ -213,8 +213,8 @@ gcloud run deploy "$SERVICE_NAME" \
     --allow-unauthenticated \
     --ingress all \
     --port 8080 \
-    --cpu 2 \
-    --memory 4Gi \
+    --cpu 1 \
+    --memory 1Gi \
     --concurrency 80 \
     --timeout 3600 \
     --min-instances 1 \
@@ -288,7 +288,7 @@ fi
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
-gcloud run services describe $SERVICE_NAME --region "$REGION" --format='value(status.url)' | sed 's|https://||'
+gcloud run services describe "$SERVICE_URL" | sed 's|https://||') --region "$REGION" --format='value(status.url)'
 
 # ==============================================
 #        INTERACTIVE OUTPUT SELECTION
