@@ -1,30 +1,18 @@
-{
-  "log": { "loglevel": "warning" },
-  "inbounds": [
-    {
-      "listen": "0.0.0.0",
-      "port": 8080,
-      "protocol": "vless",
-      "settings": {
-        "clients": [
-          {
-            "id": "9e507b33-65b6-40a4-b37f-eabad158b645"
-          }
-        ],
-        "decryption": "none"
-      },
-      "streamSettings": {
-        "network": "ws",
-        "security": "none",
-        "wsSettings": {
-          "path": "/prvtspyyy"
-        }
-      }
-    }
-  ],
-  "outbounds": [
-    {
-      "protocol": "freedom"
-    }
-  ]
-}
+FROM teddysun/xray:latest
+
+# Install socat for the health check responder
+RUN apk update && apk add --no-cache socat && rm -rf /var/cache/apk/*
+
+# Copy Xray configuration
+COPY config.json /etc/xray/config.json
+
+# Create entrypoint script with socat health check
+RUN echo '#!/bin/sh' > /entrypoint.sh && \
+    echo '# Start health check responder on port 8080' >> /entrypoint.sh && \
+    echo 'while true; do echo -e "HTTP/1.1 200 OK\r\n\r\nOK" | socat TCP-LISTEN:8080,fork,reuseaddr -; done &' >> /entrypoint.sh && \
+    echo '# Start Xray' >> /entrypoint.sh && \
+    echo 'exec /usr/bin/xray run -c /etc/xray/config.json' >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh
+
+EXPOSE 8080
+ENTRYPOINT ["/entrypoint.sh"]
