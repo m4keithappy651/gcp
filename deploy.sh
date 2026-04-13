@@ -185,51 +185,31 @@ echo -e "${C_SUCCESS}[✔]${RESET} CPU: ${BOLD}${CPU}${RESET}, Memory: ${BOLD}${
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
-# # ==============================================
-#        FULL WORKING DEPLOYMENT (NO TIMEOUT)
+# ==============================================
+#        QUOTA-SAFE LOCAL BUILD & DEPLOY (NO TIMEOUT)
 # ==============================================
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "BUILDING AND DEPLOYING (ROBUST)")${RESET}"
+echo -e "${C_PLAIN}$(math_bold "BUILDING AND DEPLOYING (QUOTA-FREE)")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
 IMAGE="gcr.io/$PROJECT_ID/$SERVICE_NAME:latest"
 
-# 1. Build the image locally
+# 1. Build the image locally to bypass Cloud Build quotas
 echo -e "${C_INFO}[*]${RESET} Building container image locally..."
 docker build -t "$IMAGE" . --quiet
 echo -e "${C_SUCCESS}[✔]${RESET} Local build complete"
 
-# 2. Push with extended timeout and retry logic
-echo -e "${C_INFO}[*]${RESET} Pushing image to Container Registry (with extended timeout)..."
-RETRY_COUNT=0
-MAX_RETRIES=3
-PUSH_SUCCESS=false
-
-while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    if timeout 600 docker push "$IMAGE" --quiet; then
-        PUSH_SUCCESS=true
-        break
-    else
-        RETRY_COUNT=$((RETRY_COUNT + 1))
-        if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-            echo -e "${C_WARN}[!]${RESET} Push attempt $RETRY_COUNT failed. Retrying in 5 seconds..."
-            sleep 5
-        fi
-    fi
-done
-
-if [ "$PUSH_SUCCESS" = false ]; then
-    echo -e "${C_ERROR}[✘]${RESET} Docker push failed after $MAX_RETRIES attempts."
-    exit 1
-fi
+# 2. Push the image to Google Container Registry
+echo -e "${C_INFO}[*]${RESET} Pushing image to Container Registry..."
+docker push "$IMAGE" --quiet
 echo -e "${C_SUCCESS}[✔]${RESET} Push complete"
 
-# 3. Deploy to Cloud Run with all stability optimizations
+# 3. Deploy to Cloud Run with all timeout and stability optimizations
 echo -e "${C_INFO}[*]${RESET} Deploying to Cloud Run in ${REGION}..."
-gcloud run deploy prvtspyyy404 \
-    --image gcr.io/$PROJECT_ID/prvtspyyy404:latest \
+gcloud run deploy "$SERVICE_NAME" \
+    --image "$IMAGE" \
     --platform managed \
-    --region us-central1 \
+    --region "$REGION" \
     --allow-unauthenticated \
     --ingress all \
     --port 8080 \
@@ -242,12 +222,10 @@ gcloud run deploy prvtspyyy404 \
     --no-cpu-throttling \
     --session-affinity \
     --quiet
-    
+
 SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)' 2>/dev/null)
 CLEAN_HOST=$(echo "$SERVICE_URL" | sed 's|https://||')
 echo -e "${C_SUCCESS}[✔]${RESET} Deployment complete"
-echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo ""
 
 # --- Generate VLESS URI with Custom Address and SNI ---
 VLESS_URI="vless://${UUID}@client2.google.com:443?encryption=none&security=tls&type=ws&path=%2F${WS_PATH#/}&host=${CLEAN_HOST}&sni=firebase-settings.crashlytics.com&fp=chrome#${SERVICE_NAME}"
