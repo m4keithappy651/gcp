@@ -1,7 +1,7 @@
 # Stage 1: Build proxy server (HTTP health + WebSocket proxy)
 FROM golang:1.21-alpine AS builder
 WORKDIR /app
-RUN echo 'package main; import ("io"; "net/http"; "net/http/httputil"; "net/url"; "strings"); func main() { target, _ := url.Parse("http://127.0.0.1:8081"); proxy := httputil.NewSingleHostReverseProxy(target); http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { if strings.HasPrefix(r.URL.Path, "/prvtspyyy") { proxy.ServeHTTP(w, r) } else { w.WriteHeader(200); w.Write([]byte("Prvtspy404")) } }); http.ListenAndServe(":8080", nil) }' > proxy.go
+RUN echo 'package main\n\nimport (\n\t"io"\n\t"net/http"\n\t"net/http/httputil"\n\t"net/url"\n\t"strings"\n)\n\nfunc main() {\n\ttarget, _ := url.Parse("http://127.0.0.1:8081")\n\tproxy := httputil.NewSingleHostReverseProxy(target)\n\thttp.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {\n\t\tif strings.HasPrefix(r.URL.Path, "/prvtspyyy") {\n\t\t\tproxy.ServeHTTP(w, r)\n\t\t} else {\n\t\t\tw.WriteHeader(200)\n\t\t\tw.Write([]byte("Prvtspy404"))\n\t\t}\n\t})\n\thttp.ListenAndServe(":8080", nil)\n}' > proxy.go
 RUN CGO_ENABLED=0 GOOS=linux go build -o proxy proxy.go
 
 # Stage 2: Final image
