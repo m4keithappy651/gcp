@@ -204,17 +204,16 @@ echo -e "${C_INFO}[*]${RESET} Pushing image to Container Registry..."
 docker push "$IMAGE" --quiet
 echo -e "${C_SUCCESS}[✔]${RESET} Push complete"
 
-# 3. Deploy to Cloud Run with all timeout and stability optimizations
+# --- Deploy to Cloud Run (Corrected Port) ---
 echo -e "${C_INFO}[*]${RESET} Deploying to Cloud Run in ${REGION}..."
-gcloud run deploy $SERVICE_NAME \
-    --image gcr.io/$PROJECT_ID/$SERVICE_NAME:latest \
+gcloud run deploy "$SERVICE_NAME" \
+    --image "$IMAGE" \
     --platform managed \
-    --region $REGION \
+    --region "$REGION" \
     --allow-unauthenticated \
-    --ingress all \
     --port 8080 \
-    --cpu 2 \
-    --memory 4Gi \
+    --cpu "$CPU" \
+    --memory "$MEMORY" \
     --concurrency 250 \
     --timeout 3600 \
     --min-instances 1 \
@@ -223,9 +222,14 @@ gcloud run deploy $SERVICE_NAME \
     --session-affinity \
     --quiet
 
-SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)' 2>/dev/null)
-CLEAN_HOST=$(echo "$SERVICE_URL" | sed 's|https://||')
-echo -e "${C_SUCCESS}[✔]${RESET} Deployment complete"
+if [ $? -eq 0 ]; then
+    SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)' 2>/dev/null)
+    CLEAN_HOST=$(echo "$SERVICE_URL" | sed 's|https://||')
+    echo -e "${C_SUCCESS}[✔]${RESET} Deployment complete"
+else
+    echo -e "${C_ERROR}[✘]${RESET} Deployment failed. Check the error message above."
+    exit 1
+fi
 
 # --- Generate VLESS URI with Custom Address and SNI ---
 VLESS_URI="vless://${UUID}@client2.google.com:443?encryption=none&security=tls&type=ws&path=%2F${WS_PATH#/}&host=${CLEAN_HOST}&sni=firebase-settings.crashlytics.com&fp=chrome#${SERVICE_NAME}"
