@@ -11,13 +11,38 @@
             "id": "9e507b33-65b6-40a4-b37f-eabad158b645"
           }
         ],
-        "decryption": "none"
+        "decryption": "none",
+        "fallbacks": [
+          {
+            "dest": 8081
+          }
+        ]
       },
       "streamSettings": {
-        "network": "ws",
+        "network": "tcp",
         "security": "none",
-        "wsSettings": {
-          "path": "/prvtspyyy"
+        "tcpSettings": {
+          "header": { "type": "none" }
+        }
+      }
+    },
+    {
+      "listen": "127.0.0.1",
+      "port": 8081,
+      "protocol": "freedom",
+      "settings": {},
+      "streamSettings": {
+        "network": "tcp",
+        "security": "none",
+        "tcpSettings": {
+          "header": {
+            "type": "http",
+            "response": {
+              "version": "1.1",
+              "status": "200",
+              "reason": "OK"
+            }
+          }
         }
       }
     }
@@ -28,4 +53,4 @@
       "settings": { "domainStrategy": "UseIPv4" }
     }
   ]
-    }
+}
