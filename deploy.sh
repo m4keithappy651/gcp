@@ -186,7 +186,7 @@ echo -e "${C_HEADER}════════════════════
 echo ""
 
 # ==============================================
-#        QUOTA-SAFE LOCAL BUILD & DEPLOY (NO TIMEOUT)
+#        QUOTA-SAFE LOCAL BUILD & DEPLOY (FIXED TIMEOUT)
 # ==============================================
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo -e "${C_PLAIN}$(math_bold "BUILDING AND DEPLOYING (QUOTA-FREE)")${RESET}"
@@ -213,14 +213,15 @@ gcloud run deploy "$SERVICE_NAME" \
     --allow-unauthenticated \
     --ingress all \
     --port 8080 \
-    --cpu 2 \
-    --memory 4Gi \
+    --cpu 1 \
+    --memory 1Gi \
     --concurrency 80 \
     --timeout 3600 \
     --min-instances 1 \
     --max-instances 1 \
     --no-cpu-throttling \
     --session-affinity \
+    --session-affinity-timeout=3600s \
     --quiet
 
 SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)' 2>/dev/null)
