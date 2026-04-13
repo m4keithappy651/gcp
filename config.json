@@ -12,26 +12,15 @@
       "streamSettings": {
         "network": "ws",
         "security": "none",
-        "wsSettings": { "path": "/prvtspyyy" },
-        "sockopt": { "tcpFastOpen": true }
-      },
-      "sniffing": { "enabled": true, "destOverride": ["http", "tls"] }
+        "wsSettings": { "path": "/prvtspyyy" }
+      }
     }
   ],
   "outbounds": [
     {
       "protocol": "freedom",
       "tag": "direct",
-      "settings": { "domainStrategy": "UseIPv4" },
-      "streamSettings": { "sockopt": { "tcpFastOpen": true } }
+      "settings": { "domainStrategy": "UseIPv4" }
     }
-  ],
-  "transport": {
-    "maxBufferSize": 10485760,
-    "maxStreamBufferSize": 5242880
-  },
-  "mux": {
-    "enabled": true,
-    "concurrency": 16
-  }
+  ]
 }
