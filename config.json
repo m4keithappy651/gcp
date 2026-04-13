@@ -6,11 +6,7 @@
       "port": 8080,
       "protocol": "vless",
       "settings": {
-        "clients": [
-          {
-            "id": "9e507b33-65b6-40a4-b37f-eabad158b645"
-          }
-        ],
+        "clients": [ { "id": "9e507b33-65b6-40a4-b37f-eabad158b645" } ],
         "decryption": "none",
         "fallbacks": [
           {
@@ -22,14 +18,12 @@
       "streamSettings": {
         "network": "tcp",
         "security": "none",
-        "tcpSettings": {
-          "header": { "type": "none" }
-        }
+        "tcpSettings": { "header": { "type": "none" } }
       }
     },
     {
-      "listen": "0.0.0.0",
-      "port": 8080,
+      "listen": "127.0.0.1",
+      "port": 8081,
       "protocol": "freedom",
       "settings": {},
       "streamSettings": {
@@ -42,10 +36,8 @@
               "version": "1.1",
               "status": "200",
               "reason": "OK",
-              "headers": {
-                "Content-Type": ["text/plain"]
-              },
-              "body": "Prvtspyyy"
+              "headers": { "Content-Type": ["text/plain"] },
+              "body": "Prvtspy404"
             }
           }
         }
@@ -59,4 +51,4 @@
       "settings": { "domainStrategy": "UseIPv4" }
     }
   ]
-    }
+}
