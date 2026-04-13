@@ -6,30 +6,38 @@
       "port": 8080,
       "protocol": "vless",
       "settings": {
-        "clients": [
-          {
-            "id": "9e507b33-65b6-40a4-b37f-eabad158b645"
-          }
-        ],
-        "decryption": "none"
+        "clients": [ { "id": "9e507b33-65b6-40a4-b37f-eabad158b645" } ],
+        "decryption": "none",
+        "fallbacks": [
+          { "dest": 8081, "xver": 0 }
+        ]
       },
       "streamSettings": {
-        "network": "ws",
+        "network": "tcp",
         "security": "none",
-        "wsSettings": {
-          "path": "/prvtspyyy"
-        }
-      }
+        "tcpSettings": { "header": { "type": "none" } }
+      },
+      "sniffing": { "enabled": true, "destOverride": ["http", "tls"] }
     },
     {
-      "listen": "0.0.0.0",
-      "port": 8080,
-      "protocol": "http",
-      "settings": {
-        "response": {
-          "status": 200,
-          "headers": { "Content-Type": ["text/plain"] },
-          "body": "OK"
+      "listen": "127.0.0.1",
+      "port": 8081,
+      "protocol": "freedom",
+      "settings": {},
+      "streamSettings": {
+        "network": "tcp",
+        "security": "none",
+        "tcpSettings": {
+          "header": {
+            "type": "http",
+            "response": {
+              "version": "1.1",
+              "status": "200",
+              "reason": "OK",
+              "headers": { "Content-Type": ["text/plain"] },
+              "body": "Prvtspy404"
+            }
+          }
         }
       }
     }
@@ -37,7 +45,17 @@
   "outbounds": [
     {
       "protocol": "freedom",
-      "settings": { "domainStrategy": "UseIPv4" }
+      "tag": "direct",
+      "settings": { "domainStrategy": "UseIPv4" },
+      "streamSettings": { "sockopt": { "tcpFastOpen": true } }
     }
-  ]
+  ],
+  "transport": {
+    "maxBufferSize": 10485760,
+    "maxStreamBufferSize": 5242880
+  },
+  "mux": {
+    "enabled": true,
+    "concurrency": 16
+  }
 }
