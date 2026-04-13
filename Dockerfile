@@ -1,6 +1,6 @@
 FROM teddysun/xray:latest
 
-# Install socat for health check responder
+# Install socat for the health check responder
 RUN apk update && apk add --no-cache socat && rm -rf /var/cache/apk/*
 
 # Copy Xray configuration
