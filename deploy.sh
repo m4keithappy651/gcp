@@ -185,26 +185,46 @@ echo -e "${C_SUCCESS}[✔]${RESET} CPU: ${BOLD}${CPU}${RESET}, Memory: ${BOLD}${
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
-# ==============================================
-#        QUOTA-SAFE LOCAL BUILD & DEPLOY (FIXED TIMEOUT)
+# # ==============================================
+#        FULL WORKING DEPLOYMENT (NO TIMEOUT)
 # ==============================================
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "BUILDING AND DEPLOYING (QUOTA-FREE)")${RESET}"
+echo -e "${C_PLAIN}$(math_bold "BUILDING AND DEPLOYING (ROBUST)")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
 IMAGE="gcr.io/$PROJECT_ID/$SERVICE_NAME:latest"
 
-# 1. Build the image locally to bypass Cloud Build quotas
+# 1. Build the image locally
 echo -e "${C_INFO}[*]${RESET} Building container image locally..."
 docker build -t "$IMAGE" . --quiet
 echo -e "${C_SUCCESS}[✔]${RESET} Local build complete"
 
-# 2. Push the image to Google Container Registry
-echo -e "${C_INFO}[*]${RESET} Pushing image to Container Registry..."
-docker push "$IMAGE" --quiet
+# 2. Push with extended timeout and retry logic
+echo -e "${C_INFO}[*]${RESET} Pushing image to Container Registry (with extended timeout)..."
+RETRY_COUNT=0
+MAX_RETRIES=3
+PUSH_SUCCESS=false
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if timeout 600 docker push "$IMAGE" --quiet; then
+        PUSH_SUCCESS=true
+        break
+    else
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+            echo -e "${C_WARN}[!]${RESET} Push attempt $RETRY_COUNT failed. Retrying in 5 seconds..."
+            sleep 5
+        fi
+    fi
+done
+
+if [ "$PUSH_SUCCESS" = false ]; then
+    echo -e "${C_ERROR}[✘]${RESET} Docker push failed after $MAX_RETRIES attempts."
+    exit 1
+fi
 echo -e "${C_SUCCESS}[✔]${RESET} Push complete"
 
-# 3. Deploy to Cloud Run with all timeout and stability optimizations
+# 3. Deploy to Cloud Run with all stability optimizations
 echo -e "${C_INFO}[*]${RESET} Deploying to Cloud Run in ${REGION}..."
 gcloud run deploy "$SERVICE_NAME" \
     --image "$IMAGE" \
@@ -221,7 +241,6 @@ gcloud run deploy "$SERVICE_NAME" \
     --max-instances 1 \
     --no-cpu-throttling \
     --session-affinity \
-    --session-affinity-timeout=3600s \
     --quiet
 
 SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)' 2>/dev/null)
