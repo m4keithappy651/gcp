@@ -209,7 +209,7 @@ echo -e "${C_INFO}[*]${RESET} Deploying to Cloud Run in ${REGION}..."
 gcloud run deploy prvtspyyy-sg \
     --image gcr.io/$PROJECT_ID/prvtspyyy404:latest \
     --platform managed \
-    --region asia-southeast1 \
+    --region "$REGION" \
     --allow-unauthenticated \
     --ingress all \
     --port 8080 \
@@ -288,7 +288,7 @@ fi
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
-gcloud run services describe $SERVICE_NAME --region asia-southeast1 --format='value(status.url)' | sed 's|https://||'
+gcloud run services describe $SERVICE_NAME --region "$REGION" --format='value(status.url)' | sed 's|https://||'
 
 # ==============================================
 #        INTERACTIVE OUTPUT SELECTION
