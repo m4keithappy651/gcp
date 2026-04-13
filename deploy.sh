@@ -291,7 +291,7 @@ echo ""
 gcloud run services describe "$SERVICE_URL" | sed 's|https://||') --region "$REGION" --format='value(status.url)'
 
 # ==============================================
-#        INTERACTIVE OUTPUT SELECTION
+#        OUTPUT SELECTION (QR CODE + PING MONITOR)
 # ==============================================
 echo ""
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
@@ -299,163 +299,112 @@ echo -e "${C_PLAIN}$(math_bold "OUTPUT OPTIONS")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 echo -e "  ${C_ACCENT}[1]${RESET} Show QR Code (scan with phone)"
-echo -e "  ${C_ACCENT}[2]${RESET} Generate Clickable Link (open in browser)"
-echo -e "  ${C_ACCENT}[3]${RESET} Display Full URI (copy manually)"
-echo -e "  ${C_ACCENT}[4]${RESET} Save to File (cat /tmp/vless-uri.txt)"
-echo -e "  ${C_ACCENT}[5]${RESET} All of the above"
-echo -e "  ${C_ACCENT}[6]${RESET} Exit"
+echo -e "  ${C_ACCENT}[2]${RESET} Start Background Ping Monitor (keeps connection alive + logs)"
+echo -e "  ${C_ACCENT}[3]${RESET} Both (QR + Ping Monitor)"
+echo -e "  ${C_ACCENT}[4]${RESET} Exit"
 echo ""
-read -p "$(echo -e "${C_INFO}[?]${RESET} Select output method [1-6]: ")" OUTPUT_CHOICE
+read -p "$(echo -e "${C_INFO}[?]${RESET} Select option [1-4]: ")" OUTPUT_CHOICE
+
+# Encode URI for QR code
+VLESS_URI_ENCODED=$(echo -n "$VLESS_URI" | jq -sRr @uri 2>/dev/null || python3 -c "import urllib.parse; print(urllib.parse.quote('$VLESS_URI'))" 2>/dev/null || echo -n "$VLESS_URI" | sed 's/ /%20/g')
 
 # --- Function: Generate QR Code ---
 generate_qr() {
     echo ""
     echo -e "${C_INFO}[*]${RESET} Generating QR code..."
     
-    # Install qrencode if not present
     if ! command -v qrencode &> /dev/null; then
         echo -e "${C_WARN}[!]${RESET} Installing qrencode (one-time)..."
-        sudo apt-get update -qq && sudo apt-get install -y qrencode -qq 2>/dev/null || {
-            echo -e "${C_ERROR}[✘]${RESET} Could not install qrencode. Use option 3 for URI."
-            return 1
-        }
+        sudo apt-get update -qq && sudo apt-get install -y qrencode -qq 2>/dev/null
     fi
     
-    echo ""
-    echo -e "${C_PLAIN}Scan this QR code with your VLESS client:${RESET}"
-    echo ""
-    echo "$VLESS_URI" | qrencode -t ANSIUTF8
-    echo ""
-    echo -e "${C_SUCCESS}[✔]${RESET} QR code displayed above"
-}
-
-# --- Function: Generate Clickable Link ---
-generate_link() {
-    # Save to HTML file
-    cat > /tmp/vless-config.html <<EOF
-<!DOCTYPE html>
-<html>
-<head>
-    <title>VLESS Config - $SERVICE_NAME</title>
-    <meta charset="UTF-8">
-    <style>
-        body { font-family: monospace; padding: 20px; background: #1a1a2e; color: #eee; }
-        h2 { color: #00d4ff; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .field { background: #16213e; padding: 10px; margin: 10px 0; border-radius: 5px; }
-        .label { color: #00d4ff; font-weight: bold; }
-        textarea { width: 100%; padding: 10px; background: #0f3460; color: #fff; border: none; border-radius: 5px; font-family: monospace; }
-        button { background: #00d4ff; color: #1a1a2e; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; cursor: pointer; margin: 5px; }
-        button:hover { background: #00b4d8; }
-        .qr { text-align: center; margin: 20px 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h2>🚀 VLESS Configuration - $SERVICE_NAME</h2>
-        <p><strong>Created by prvtspyyy</strong></p>
-        
-        <div class="field">
-            <span class="label">Full URI:</span><br>
-            <textarea id="uri" rows="3" onclick="this.select()">$VLESS_URI</textarea>
-            <button onclick="copyURI()">Copy URI</button>
-        </div>
-        
-        <div class="field">
-            <span class="label">Address:</span> $CLEAN_HOST
-        </div>
-        <div class="field">
-            <span class="label">Port:</span> 443
-        </div>
-        <div class="field">
-            <span class="label">UUID:</span> $UUID
-        </div>
-        <div class="field">
-            <span class="label">Path:</span> $WS_PATH
-        </div>
-        <div class="field">
-            <span class="label">Transport:</span> ws
-        </div>
-        <div class="field">
-            <span class="label">TLS:</span> Enabled
-        </div>
-        
-        <div class="qr">
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=$(echo -n "$VLESS_URI" | jq -sRr @uri)" alt="QR Code">
-            <p>Scan with your phone</p>
-        </div>
-    </div>
-    
-    <script>
-        function copyURI() {
-            var textarea = document.getElementById('uri');
-            textarea.select();
-            navigator.clipboard.writeText(textarea.value);
-            alert('URI copied to clipboard!');
-        }
-    </script>
-</body>
-</html>
-EOF
-
-    echo ""
-    echo -e "${C_SUCCESS}[✔]${RESET} Configuration page created!"
-    echo -e "${C_INFO}[*]${RESET} Starting web server on port 8888..."
-    echo ""
-    
-    # Kill any existing server on port 8888
-    fuser -k 8888/tcp 2>/dev/null || true
-    
-    # Start Python HTTP server in background
-    cd /tmp && python3 -m http.server 8888 --bind 0.0.0.0 > /dev/null 2>&1 &
-    SERVER_PID=$!
-    
-    # Generate Cloud Shell Web Preview URL
-    WEB_PREVIEW_URL="https://shell.cloud.google.com/devshell/proxy?port=8888"
-    
-    echo -e "${C_PLAIN}╔════════════════════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${C_PLAIN}║${RESET}  ${BOLD}${GREEN}CLICKABLE LINK READY${RESET}                                                 ${C_PLAIN}║${RESET}"
-    echo -e "${C_PLAIN}╠════════════════════════════════════════════════════════════════════════════╣${RESET}"
-    echo -e "${C_PLAIN}║${RESET}  ${CYAN}Open this URL in your browser:${RESET}                                        ${C_PLAIN}║${RESET}"
-    echo -e "${C_PLAIN}║${RESET}  ${BOLD}${WHITE}$WEB_PREVIEW_URL${RESET}${C_PLAIN}║${RESET}"
-    echo -e "${C_PLAIN}║${RESET}                                                                            ${C_PLAIN}║${RESET}"
-    echo -e "${C_PLAIN}║${RESET}  ${YELLOW}Press Ctrl+C here to stop the web server when done${RESET}                  ${C_PLAIN}║${RESET}"
-    echo -e "${C_PLAIN}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
-    echo ""
-    echo -e "${C_WARN}[!]${RESET} Server running in background (PID: $SERVER_PID)"
-    echo -e "${C_INFO}[*]${RESET} To stop: ${BOLD}kill $SERVER_PID${RESET}"
-}
-
-# --- Function: Display Full URI ---
-display_uri() {
-    echo ""
-    echo -e "${C_PLAIN}╔════════════════════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${C_PLAIN}║${RESET}  ${BOLD}FULL VLESS URI (Triple-click to select all)${RESET}                          ${C_PLAIN}║${RESET}"
-    echo -e "${C_PLAIN}╠════════════════════════════════════════════════════════════════════════════╣${RESET}"
-    echo -e "${C_PLAIN}║${RESET}  ${VLESS_URI:0:70}${C_PLAIN}║${RESET}"
-    if [ ${#VLESS_URI} -gt 70 ]; then
-        echo -e "${C_PLAIN}║${RESET}  ${VLESS_URI:70:70}${C_PLAIN}║${RESET}"
+    if command -v qrencode &> /dev/null; then
+        echo ""
+        echo -e "${C_PLAIN}Scan this QR code with your VLESS client:${RESET}"
+        echo ""
+        echo "$VLESS_URI" | qrencode -t ANSIUTF8
+        echo ""
+        echo -e "${C_SUCCESS}[✔]${RESET} QR code displayed above"
+    else
+        echo -e "${C_WARN}[!]${RESET} qrencode not available. Use this URI manually:"
+        echo -e "${BOLD}$VLESS_URI${RESET}"
     fi
-    if [ ${#VLESS_URI} -gt 140 ]; then
-        echo -e "${C_PLAIN}║${RESET}  ${VLESS_URI:140:70}${C_PLAIN}║${RESET}"
-    fi
-    echo -e "${C_PLAIN}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
-    echo ""
 }
 
-# --- Function: Save to File ---
-save_to_file() {
-    echo "$VLESS_URI" > /tmp/vless-uri.txt
-    echo "$CLEAN_HOST" > /tmp/vless-host.txt
-    echo "$UUID" > /tmp/vless-uuid.txt
-    echo "$WS_PATH" > /tmp/vless-path.txt
+# --- Function: Start Background Ping Monitor (Zero Quota) ---
+start_ping_monitor() {
+    local TARGET="${CLEAN_HOST}"
+    local INTERVAL="${PING_INTERVAL:-25}"
+    local LOG_FILE="/tmp/vless-ping-$(date +%Y%m%d-%H%M%S).log"
     
     echo ""
-    echo -e "${C_SUCCESS}[✔]${RESET} Configuration saved!"
-    echo -e "${C_INFO}[*]${RESET} Copy URI: ${BOLD}cat /tmp/vless-uri.txt${RESET}"
-    echo -e "${C_INFO}[*]${RESET} Copy Host: ${BOLD}cat /tmp/vless-host.txt${RESET}"
-    echo -e "${C_INFO}[*]${RESET} Copy UUID: ${BOLD}cat /tmp/vless-uuid.txt${RESET}"
-    echo -e "${C_INFO}[*]${RESET} Copy Path: ${BOLD}cat /tmp/vless-path.txt${RESET}"
+    echo -e "${C_INFO}[*]${RESET} Starting background ping monitor..."
+    echo -e "${C_INFO}[*]${RESET} Target: ${BOLD}${TARGET}${RESET}"
+    echo -e "${C_INFO}[*]${RESET} Interval: ${BOLD}${INTERVAL}s${RESET}"
+    echo -e "${C_INFO}[*]${RESET} Log: ${BOLD}${LOG_FILE}${RESET}"
+    
+    # Create the monitor script
+    cat > /tmp/ping-monitor.sh <<'MONITOR_EOF'
+#!/bin/bash
+TARGET="$1"
+INTERVAL="$2"
+LOG_FILE="$3"
+
+echo "$$" > /tmp/ping-monitor.pid
+echo "Ping monitor started with PID: $$"
+echo "Log file: $LOG_FILE"
+echo "Press Ctrl+C or run 'kill $$' to stop."
+echo ""
+
+while true; do
+    TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+    PING_RESULT=$(curl -o /dev/null -s -w '%{time_total}|%{http_code}' --max-time 5 "https://$TARGET/health" 2>/dev/null)
+    
+    if [ -n "$PING_RESULT" ]; then
+        RESPONSE_TIME=$(echo "$PING_RESULT" | cut -d'|' -f1)
+        HTTP_CODE=$(echo "$PING_RESULT" | cut -d'|' -f2)
+        LATENCY_MS=$(echo "$RESPONSE_TIME * 1000" | bc 2>/dev/null | cut -d'.' -f1)
+        
+        if [ "$HTTP_CODE" = "200" ]; then
+            echo "[$TIMESTAMP] UP   | ${LATENCY_MS}ms | HTTP $HTTP_CODE" | tee -a "$LOG_FILE"
+        else
+            echo "[$TIMESTAMP] WARN | HTTP $HTTP_CODE" | tee -a "$LOG_FILE"
+        fi
+    else
+        echo "[$TIMESTAMP] DOWN | No response" | tee -a "$LOG_FILE"
+    fi
+    
+    sleep "$INTERVAL"
+done
+MONITOR_EOF
+
+    chmod +x /tmp/ping-monitor.sh
+    
+    # Start the monitor in background
+    nohup /tmp/ping-monitor.sh "$TARGET" "$INTERVAL" "$LOG_FILE" > /tmp/ping-monitor-output.log 2>&1 &
+    MONITOR_PID=$!
+    
+    sleep 1
+    if kill -0 $MONITOR_PID 2>/dev/null; then
+        echo ""
+        echo -e "${C_SUCCESS}╔════════════════════════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${C_SUCCESS}║${RESET}                    ${BOLD}${GREEN}PING MONITOR STARTED${RESET}                              ${C_SUCCESS}║${RESET}"
+        echo -e "${C_SUCCESS}╠════════════════════════════════════════════════════════════════════════════╣${RESET}"
+        echo -e "${C_SUCCESS}║${RESET}  ${CYAN}PID:${RESET}        ${BOLD}$MONITOR_PID${RESET}"
+        echo -e "${C_SUCCESS}║${RESET}  ${CYAN}Log File:${RESET}   ${BOLD}$LOG_FILE${RESET}"
+        echo -e "${C_SUCCESS}║${RESET}  ${CYAN}Interval:${RESET}   ${BOLD}${INTERVAL}s${RESET}"
+        echo -e "${C_SUCCESS}║${RESET}                                                                            ${C_SUCCESS}║${RESET}"
+        echo -e "${C_SUCCESS}║${RESET}  ${CYAN}Commands:${RESET}                                                              ${C_SUCCESS}║${RESET}"
+        echo -e "${C_SUCCESS}║${RESET}    View log:  ${GREEN}tail -f $LOG_FILE${RESET}${C_SUCCESS}║${RESET}"
+        echo -e "${C_SUCCESS}║${RESET}    Stop:       ${GREEN}kill $MONITOR_PID${RESET}${C_SUCCESS}║${RESET}"
+        echo -e "${C_SUCCESS}║${RESET}    Check:      ${GREEN}kill -0 $MONITOR_PID && echo 'Running'${RESET}${C_SUCCESS}║${RESET}"
+        echo -e "${C_SUCCESS}╚════════════════════════════════════════════════════════════════════════════╝${RESET}"
+        echo ""
+        echo -e "${C_WARN}[!]${RESET} Monitor will stop when Cloud Shell session ends."
+        echo -e "${C_INFO}[*]${RESET} For 24/7 monitoring, deploy the keepalive-monitor Cloud Run service."
+    else
+        echo -e "${C_ERROR}[✘]${RESET} Failed to start monitor."
+    fi
 }
 
 # --- Process User Choice ---
@@ -464,31 +413,23 @@ case $OUTPUT_CHOICE in
         generate_qr
         ;;
     2)
-        generate_link
+        start_ping_monitor
         ;;
     3)
-        display_uri
+        generate_qr
+        start_ping_monitor
         ;;
     4)
-        save_to_file
-        ;;
-    5)
-        generate_qr
-        generate_link
-        display_uri
-        save_to_file
-        ;;
-    6)
         echo -e "${C_INFO}[*]${RESET} Exiting..."
         ;;
     *)
-        echo -e "${C_WARN}[!]${RESET} Invalid choice. Displaying URI..."
-        display_uri
+        echo -e "${C_WARN}[!]${RESET} Invalid choice. Exiting..."
         ;;
 esac
 
-# Always save to file as backup
+# Always save URI to file
 echo "$VLESS_URI" > /tmp/vless-uri.txt
+
 echo ""
 echo -e "${C_SUCCESS}╔════════════════════════════════════════════════════════════════════════════╗${RESET}"
 echo -e "${C_SUCCESS}║${RESET}   ${BOLD}${WHITE}$(math_bold "DEPLOYMENT COMPLETE")${RESET}                                            ${C_SUCCESS}║${RESET}"
