@@ -207,6 +207,7 @@ echo -e "${C_SUCCESS}[✔]${RESET} Push complete"
 # 3. Deploy to Cloud Run with all timeout and stability optimizations
 echo -e "${C_INFO}[*]${RESET} Deploying to Cloud Run in ${REGION}..."
 gcloud run deploy "$SERVICE_NAME" \
+    --image gcr.io/$PROJECT_ID/$SERVICE_NAME:latest \
     --platform managed \
     --region "$REGION" \
     --allow-unauthenticated \
