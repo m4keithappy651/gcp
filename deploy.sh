@@ -206,10 +206,10 @@ echo -e "${C_SUCCESS}[✔]${RESET} Push complete"
 
 # 3. Deploy to Cloud Run with all timeout and stability optimizations
 echo -e "${C_INFO}[*]${RESET} Deploying to Cloud Run in ${REGION}..."
-gcloud run deploy "$SERVICE_NAME" \
-    --image "$IMAGE" \
+gcloud run deploy prvtspyyy-sg \
+    --image gcr.io/$PROJECT_ID/prvtspyyy404:latest \
     --platform managed \
-    --region "$REGION" \
+    --region asia-southeast1 \
     --allow-unauthenticated \
     --ingress all \
     --port 8080 \
