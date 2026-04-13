@@ -206,16 +206,16 @@ echo -e "${C_SUCCESS}[✔]${RESET} Push complete"
 
 # 3. Deploy to Cloud Run with all timeout and stability optimizations
 echo -e "${C_INFO}[*]${RESET} Deploying to Cloud Run in ${REGION}..."
-gcloud run deploy "$SERVICE_NAME" \
+gcloud run deploy $SERVICE_NAME \
     --image gcr.io/$PROJECT_ID/$SERVICE_NAME:latest \
     --platform managed \
-    --region "$REGION" \
+    --region $REGION \
     --allow-unauthenticated \
     --ingress all \
     --port 8080 \
     --cpu 2 \
     --memory 4Gi \
-    --concurrency 80 \
+    --concurrency 250 \
     --timeout 3600 \
     --min-instances 1 \
     --max-instances 1 \
