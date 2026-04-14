@@ -1,17 +1,25 @@
+FROM caddy:2-alpine AS caddy
 FROM teddysun/xray:latest
 
-# No additional packages needed - nc is already present
+# Copy Caddy binary from the official image
+COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
+
+# Copy Xray configuration (listening on internal port 8081)
 COPY config.json /etc/xray/config.json
 
-# Entrypoint: Start shell health server on 8081 FIRST, then Xray on 8080
+# Create Caddyfile to route traffic
+RUN echo ':8080 {' > /etc/caddy/Caddyfile && \
+    echo '    respond /health 200' >> /etc/caddy/Caddyfile && \
+    echo '    handle_path /prvtspyyy {' >> /etc/caddy/Caddyfile && \
+    echo '        reverse_proxy localhost:8081' >> /etc/caddy/Caddyfile && \
+    echo '    }' >> /etc/caddy/Caddyfile && \
+    echo '}' >> /etc/caddy/Caddyfile
+
+# Entrypoint: Start Xray in background, Caddy in foreground
 RUN echo '#!/bin/sh' > /entrypoint.sh && \
-    echo '# Start instant health check server on port 8081' >> /entrypoint.sh && \
-    echo 'while true; do printf "HTTP/1.1 200 OK\r\n\r\nOK" | nc -l -p 8081 -q 1; done &' >> /entrypoint.sh && \
-    echo '# Give health server time to bind' >> /entrypoint.sh && \
-    echo 'sleep 0.5' >> /entrypoint.sh && \
-    echo '# Start Xray on port 8080' >> /entrypoint.sh && \
-    echo 'exec /usr/bin/xray run -c /etc/xray/config.json' >> /entrypoint.sh && \
+    echo '/usr/bin/xray run -c /etc/xray/config.json &' >> /entrypoint.sh && \
+    echo 'exec /usr/bin/caddy run --config /etc/caddy/Caddyfile' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
 
-EXPOSE 8080 8081
+EXPOSE 8080
 ENTRYPOINT ["/entrypoint.sh"]
