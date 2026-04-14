@@ -163,7 +163,9 @@ echo -e "${C_SUCCESS}[✔]${RESET} Service name: ${BOLD}${SERVICE_NAME}${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
-# --- CPU/RAM Selection (Small to Large with Recommended) ---
+# ==============================================
+#        CPU AND MEMORY SELECTION (FIXED)
+# ==============================================
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo -e "${C_PLAIN}$(math_bold "CPU AND MEMORY SELECTION")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
@@ -172,15 +174,22 @@ echo -e "  ${C_ACCENT}[2]${RESET} 1 vCPU, 2 GiB RAM"
 echo -e "  ${C_ACCENT}[3]${RESET} 2 vCPU, 2 GiB RAM"
 echo -e "  ${C_ACCENT}[4]${RESET} 2 vCPU, 4 GiB RAM ${GREEN}(RECOMMENDED)${RESET}"
 echo -e "  ${C_ACCENT}[5]${RESET} 4 vCPU, 8 GiB RAM"
-read -p "$(echo -e "${C_INFO}[?]${RESET} Select configuration [1-5] [default: 4]: ")" CPU_RAM_CHOICE
+echo -e "  ${C_ACCENT}[6]${RESET} 4 vCPU, 16 GiB RAM"
+read -p "$(echo -e "${C_INFO}[?]${RESET} Select configuration [1-6] [default: 4]: ")" CPU_RAM_CHOICE
+
+# Default to 4 if empty
+CPU_RAM_CHOICE="${CPU_RAM_CHOICE:-4}"
+
 case $CPU_RAM_CHOICE in
     1) CPU="1"; MEMORY="1Gi" ;;
     2) CPU="1"; MEMORY="2Gi" ;;
     3) CPU="2"; MEMORY="2Gi" ;;
     4) CPU="2"; MEMORY="4Gi" ;;
     5) CPU="4"; MEMORY="8Gi" ;;
+    6) CPU="4"; MEMORY="16Gi" ;;
     *) CPU="2"; MEMORY="4Gi" ; echo -e "${C_WARN}[!]${RESET} Invalid choice, using recommended (2 vCPU, 4 GiB)" ;;
 esac
+
 echo -e "${C_SUCCESS}[✔]${RESET} CPU: ${BOLD}${CPU}${RESET}, Memory: ${BOLD}${MEMORY}${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
