@@ -209,11 +209,11 @@ echo -e "${C_INFO}[*]${RESET} Deploying to Cloud Run in ${REGION}..."
 gcloud run deploy "$SERVICE_NAME" \
     --image "$IMAGE" \
     --platform managed \
-    --region "$REGION" \
+    --region us-central1 \
     --allow-unauthenticated \
     --port 8080 \
-    --cpu "$CPU" \
-    --memory "$MEMORY" \
+    --cpu 2 \
+    --memory 4Gi \
     --concurrency 250 \
     --timeout 3600 \
     --min-instances 1 \
