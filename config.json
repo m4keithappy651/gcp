@@ -40,4 +40,34 @@
       "settings": { "domainStrategy": "UseIPv4" }
     }
   ]
+  "dns": {
+    "servers": [
+      {
+        "address": "https://dns.adguard-dns.com/dns-query",
+        "domains": ["geosite:category-ads-all"]
+      },
+      {
+        "address": "https://dns.cloudflare.com/dns-query",
+        "domains": ["geosite:geolocation-!cn"]
+      }
+    ]
+  },
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "type": "field",
+        "domain": ["geosite:category-ads-all"],
+        "outboundTag": "block"
+      },
+      {
+        "type": "field",
+        "domain": ["geosite:category-ads-all"],
+        "ip": ["0.0.0.0/0"],
+        "outboundTag": "block"
+      }
+    ]
+  },
+  "transport": { "maxBufferSize": 10485760, "maxStreamBufferSize": 5242880 },
+  "mux": { "enabled": true, "concurrency": 16 }
 }
