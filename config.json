@@ -25,5 +25,13 @@
       "settings": { "domainStrategy": "UseIPv4" },
       "streamSettings": { "sockopt": { "tcpFastOpen": true } }
     }
-  ]
+  ],
+  "transport": {
+    "maxBufferSize": 10485760,
+    "maxStreamBufferSize": 5242880
+  },
+  "mux": {
+    "enabled": true,
+    "concurrency": 16
+  }
 }
