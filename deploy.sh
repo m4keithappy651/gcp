@@ -117,37 +117,19 @@ echo -e "${C_SUCCESS}[✔]${RESET} Project: ${BOLD}${PROJECT_ID}${RESET}"
 echo ""
 
 # ==============================================
-#    POLICY-AWARE REGION FALLBACK
+# ==============================================
+#        AUTOMATIC REGION SELECTION (QWIKLABS)
 # ==============================================
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${C_PLAIN}$(math_bold "US-CENTRAL1 REGION DEPLOY")${RESET}"
+echo -e "${C_PLAIN}$(math_bold "REGION SELECTION")${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 
-# Candidate regions ordered by likelihood of being allowed in Qwiklabs
-CANDIDATE_REGIONS=("us-central1" "us-east1" "us-west1" "europe-west1" "asia-east1" "asia-southeast1")
-SELECTED_REGION=""
+# Qwiklabs projects are restricted to us-central1 by organization policy.
+# Any other region will fail with a policy violation.
+REGION="us-central1"
 
-for reg in "${CANDIDATE_REGIONS[@]}"; do
-    echo -e "  ${C_INFO}[→]${RESET} Attempting deployment in ${reg}..."
-    
-    # Attempt a dry-run deployment to test policy compliance
-    if gcloud run deploy --dry-run --region="$reg" --platform managed --port 8080 --cpu 1 --memory 1Gi --timeout 3600 --quiet &>/dev/null; then
-        SELECTED_REGION="$reg"
-        echo -e "  ${C_SUCCESS}[✔]${RESET} ${reg} is allowed by policy"
-        break
-    else
-        echo -e "  ${C_WARN}[✘]${RESET} ${reg} is blocked by policy or quota"
-    fi
-    sleep 0.3
-done
-
-if [ -z "$SELECTED_REGION" ]; then
-    echo -e "${C_ERROR}[✘]${RESET} No policy-compliant region found. Forcing us-central1 as last resort..."
-    SELECTED_REGION="us-central1"
-fi
-
-REGION="$SELECTED_REGION"
-echo -e "${C_SUCCESS}[✔]${RESET} Selected region: ${BOLD}${WHITE}${REGION}${RESET}"
+echo -e "${C_INFO}[*]${RESET} Qwiklabs environment detected."
+echo -e "${C_SUCCESS}[✔]${RESET} Automatically locked to region: ${BOLD}${WHITE}${REGION}${RESET}"
 echo -e "${C_HEADER}════════════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 
