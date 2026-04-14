@@ -24,7 +24,7 @@
     {
       "listen": "0.0.0.0",
       "port": 8080,
-      "protocol": "https",
+      "protocol": "http",
       "settings": {
         "response": {
           "status": 200,
